@@ -4,7 +4,8 @@ mod i18n;
 
 use std::collections::BTreeMap;
 
-use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
+use chrono::{Datelike, Duration, NaiveDate, TimeZone, Timelike, Utc, Weekday};
+use chrono_tz::America::Montreal as MontrealTz;
 use leptos::prelude::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
@@ -15,8 +16,16 @@ use components::info::{InfoKind, InfoPage};
 use components::map::RegionMap;
 use data::loader::{self, DailySeries, IqaDominanceMap, MapStats, Meta, SeriesFile};
 use data::pollutants;
-use data::types::{Interval, Stat, Station, View};
+use data::types::{Interval, Profile, Stat, Station, View};
 use i18n::Lang;
+
+/// Fixed anchor for synthetic profile axes — a Monday at UTC midnight. Diurnal
+/// profiles lay points at `ANCHOR + h hours`; the weekly profile at `ANCHOR + d days`.
+fn profile_anchor() -> chrono::DateTime<Utc> {
+    Utc.from_utc_datetime(
+        &NaiveDate::from_ymd_opt(2001, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+    )
+}
 
 #[wasm_bindgen(start)]
 pub fn main() {
@@ -65,6 +74,8 @@ fn App() -> impl IntoView {
     let (year_to, set_year_to) = signal(2024);
     let (selected_station, set_selected_station) = signal::<Option<u32>>(None);
     let (interval, set_interval) = signal(Interval::Month);
+    // Averaging profile (None = ordinary time series).
+    let (profile, set_profile) = signal::<Option<Profile>>(None);
     let (date_from, set_date_from) = signal(NaiveDate::from_ymd_opt(1986, 1, 1).unwrap());
     let (date_to, set_date_to) = signal(NaiveDate::from_ymd_opt(2024, 12, 31).unwrap());
     let (date_presets, set_date_presets) = signal::<Vec<(String, NaiveDate, NaiveDate)>>(vec![]);
@@ -202,9 +213,11 @@ fn App() -> impl IntoView {
         });
     });
 
-    // ── Fetch hourly per-year files on demand (Hour interval only) ──
+    // ── Fetch hourly per-year files on demand (Hour interval or diurnal profile) ──
     Effect::new(move |_| {
-        if view.get() != View::Series || interval.get() != Interval::Hour {
+        let needs_hourly =
+            interval.get() == Interval::Hour || profile.get().is_some_and(|p| p.needs_hourly());
+        if view.get() != View::Series || !needs_hourly {
             return;
         }
         let Some(sid) = selected_station.get() else { return };
@@ -224,14 +237,20 @@ fn App() -> impl IntoView {
         }
     });
 
-    // ── Derived chart series (single station × substance), tiered by interval ──
+    // ── Derived chart series (single station × substance) ──
+    // Normal mode: bucket by interval on the appropriate tier. Profile modes fold
+    // the range onto a short repeating base — Weekday/Weekend → a 24-hour diurnal
+    // mean from the hourly tier; Weekly → a 7-point day-of-week mean from the daily
+    // tier (Montreal-local; UTC-midnight daily stamps use their calendar weekday).
     let build_series = move || -> Vec<Series> {
         let Some(sid) = selected_station.get() else { return vec![] };
         let sub = selected_substance.get();
+        let prof = profile.get();
         let iv = interval.get();
 
-        // Collect raw readings from the appropriate tier.
-        let readings = if iv == Interval::Hour {
+        let use_hourly =
+            prof.is_some_and(|p| p.needs_hourly()) || (prof.is_none() && iv == Interval::Hour);
+        let mut readings = if use_hourly {
             let cache = hourly_cache.get();
             let mut rs = Vec::new();
             for y in hourly_years_in_range() {
@@ -249,13 +268,52 @@ fn App() -> impl IntoView {
         if readings.is_empty() {
             return vec![];
         }
-        let mut pts = loader::aggregate(&readings, iv);
 
+        // Date-range filter on the raw readings.
         let from_dt = date_from.get().and_hms_opt(0, 0, 0).map(|n| Utc.from_utc_datetime(&n));
         let to_dt = date_to.get().and_hms_opt(23, 59, 59).map(|n| Utc.from_utc_datetime(&n));
-        pts.retain(|(dt, _)| {
-            from_dt.map_or(true, |f| *dt >= f) && to_dt.map_or(true, |t| *dt <= t)
+        readings.retain(|r| {
+            from_dt.map_or(true, |f| r.timestamp >= f) && to_dt.map_or(true, |t| r.timestamp <= t)
         });
+        if readings.is_empty() {
+            return vec![];
+        }
+
+        let anchor = profile_anchor();
+        let pts: Vec<(chrono::DateTime<Utc>, f64)> = match prof {
+            None => loader::aggregate(&readings, iv),
+            Some(p @ (Profile::Weekday | Profile::Weekend)) => {
+                let mut sum = [0.0_f64; 24];
+                let mut cnt = [0u32; 24];
+                for r in &readings {
+                    let local = r.timestamp.with_timezone(&MontrealTz);
+                    let weekend = matches!(local.weekday(), Weekday::Sat | Weekday::Sun);
+                    if (p == Profile::Weekday) == weekend {
+                        continue; // weekday profile drops weekends, and vice-versa
+                    }
+                    let h = local.hour() as usize;
+                    sum[h] += r.value;
+                    cnt[h] += 1;
+                }
+                (0..24)
+                    .filter(|&h| cnt[h] > 0)
+                    .map(|h| (anchor + Duration::hours(h as i64), sum[h] / cnt[h] as f64))
+                    .collect()
+            }
+            Some(Profile::Weekly) => {
+                let mut sum = [0.0_f64; 7];
+                let mut cnt = [0u32; 7];
+                for r in &readings {
+                    let d = r.timestamp.date_naive().weekday().num_days_from_monday() as usize;
+                    sum[d] += r.value;
+                    cnt[d] += 1;
+                }
+                (0..7)
+                    .filter(|&d| cnt[d] > 0)
+                    .map(|d| (anchor + Duration::days(d as i64), sum[d] / cnt[d] as f64))
+                    .collect()
+            }
+        };
         if pts.is_empty() {
             return vec![];
         }
@@ -267,12 +325,11 @@ fn App() -> impl IntoView {
             .find(|s| s.id == sid)
             .map(|s| s.name.clone())
             .unwrap_or_default();
-        vec![Series {
-            label: format!("{} — {}", name, pollutants::name_of(&sub, l)),
-            color: "#4a9eff".to_string(),
-            dash: String::new(),
-            points: pts,
-        }]
+        let label = match prof {
+            None => format!("{} — {}", name, pollutants::name_of(&sub, l)),
+            Some(p) => format!("{} — {} ({})", name, pollutants::name_of(&sub, l), p.label(l)),
+        };
+        vec![Series { label, color: "#4a9eff".to_string(), dash: String::new(), points: pts }]
     };
     let (chart_series, set_chart_series) = signal::<Vec<Series>>(vec![]);
     Effect::new(move |_| set_chart_series.set(build_series()));
@@ -291,12 +348,29 @@ fn App() -> impl IntoView {
             .and_then(|sid| stations.get().iter().find(|s| s.id == sid).map(|s| s.name.clone()))
             .unwrap_or_default();
         let sub = pollutants::display_label(&selected_substance.get(), l);
-        let iv = interval.get().label(l);
+        // The aggregation slot shows the profile when one is active, else the interval.
+        let mode = match profile.get() {
+            Some(p) => format!("{} {}", p.label(l), l.t().profile.to_lowercase()),
+            None => interval.get().label(l).to_string(),
+        };
         format!(
-            "{name} · {sub} · {iv} · {} → {}",
+            "{name} · {sub} · {mode} · {} → {}",
             date_from.get().format("%Y-%m-%d"),
             date_to.get().format("%Y-%m-%d"),
         )
+    });
+
+    // Fixed x-axis range for profile modes (synthetic 24-hour or 7-day base).
+    let x_range = Signal::derive(move || match profile.get() {
+        None => None,
+        Some(p) if p.needs_hourly() => {
+            let a = profile_anchor();
+            Some((a, a + Duration::hours(24)))
+        }
+        Some(_) => {
+            let a = profile_anchor();
+            Some((a, a + Duration::days(7)))
+        }
     });
 
     // IQA acceptability thresholds, drawn as reference lines on the chart when
@@ -348,6 +422,10 @@ fn App() -> impl IntoView {
     });
     let on_station = Callback::new(move |id: u32| set_selected_station.set(Some(id)));
     let on_interval = Callback::new(move |iv: Interval| set_interval.set(iv));
+    // Toggle a profile: clicking the active one turns it back off.
+    let on_profile = Callback::new(move |p: Profile| {
+        set_profile.update(|cur| *cur = if *cur == Some(p) { None } else { Some(p) });
+    });
     let on_date_from = Callback::new(move |d: NaiveDate| set_date_from.set(d));
     let on_date_to = Callback::new(move |d: NaiveDate| set_date_to.set(d));
     let on_date_preset = Callback::new(move |(f, t): (NaiveDate, NaiveDate)| {
@@ -415,6 +493,8 @@ fn App() -> impl IntoView {
                 on_station=on_station
                 interval=interval
                 on_interval=on_interval
+                profile=profile
+                on_profile=on_profile
                 date_from=date_from
                 date_to=date_to
                 on_date_from=on_date_from
@@ -438,7 +518,8 @@ fn App() -> impl IntoView {
                     }.into_any(),
                     View::Series => view! {
                         <Chart series=chart_series interval=interval y_title=y_title
-                               thresholds=iqa_thresholds caption=chart_caption />
+                               thresholds=iqa_thresholds caption=chart_caption
+                               profile=profile.into() x_range=x_range />
                     }.into_any(),
                     View::Network => view! { <InfoPage kind=InfoKind::Network /> }.into_any(),
                     View::Methods => view! { <InfoPage kind=InfoKind::Methods /> }.into_any(),

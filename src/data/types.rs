@@ -110,6 +110,35 @@ impl Interval {
     }
 }
 
+/// Averaging profile for the time-series view: fold the selected date range onto
+/// a short repeating time base. Weekday/Weekend produce a 24-hour diurnal mean
+/// (from hourly data); Weekly produces a 7-point day-of-week mean (from the daily
+/// tier, so it spans the whole record).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Profile {
+    Weekday,
+    Weekend,
+    Weekly,
+}
+
+impl Profile {
+    pub fn all() -> &'static [Profile] {
+        &[Profile::Weekday, Profile::Weekend, Profile::Weekly]
+    }
+    pub fn label(self, lang: Lang) -> &'static str {
+        let t = lang.t();
+        match self {
+            Profile::Weekday => t.prof_weekday,
+            Profile::Weekend => t.prof_weekend,
+            Profile::Weekly => t.prof_weekly,
+        }
+    }
+    /// True for the diurnal profiles, which need the hourly tier.
+    pub fn needs_hourly(self) -> bool {
+        matches!(self, Profile::Weekday | Profile::Weekend)
+    }
+}
+
 /// Which top-level view is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {

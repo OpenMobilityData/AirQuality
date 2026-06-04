@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use leptos::prelude::*;
 
 use crate::data::pollutants;
-use crate::data::types::{Interval, Stat, Station, View};
+use crate::data::types::{Interval, Profile, Stat, Station, View};
 use crate::i18n::Lang;
 
 /// The filter sidebar. Shows the substance/statistic pickers in Map view and
@@ -33,6 +33,9 @@ pub fn Sidebar(
 
     interval: ReadSignal<Interval>,
     on_interval: Callback<Interval>,
+
+    profile: ReadSignal<Option<Profile>>,
+    on_profile: Callback<Profile>,
 
     date_from: ReadSignal<NaiveDate>,
     date_to: ReadSignal<NaiveDate>,
@@ -186,11 +189,30 @@ pub fn Sidebar(
                     <label class="section-label">{move || lang.get().t().interval}</label>
                     <div class="btn-group">
                         {Interval::all().iter().map(|&iv| {
+                            // A profile defines its own time base, so the interval is inert then.
+                            let disabled = move || profile.get().is_some();
                             view! {
                                 <button
-                                    class=move || if interval.get() == iv { "active" } else { "" }
+                                    disabled=disabled
+                                    class=move || if profile.get().is_none() && interval.get() == iv { "active" } else { "" }
                                     on:click=move |_| on_interval.run(iv)>
                                     {move || iv.label(lang.get())}
+                                </button>
+                            }
+                        }).collect_view()}
+                    </div>
+                </div>
+
+                // ── Averaging profile (Weekday / Weekend / Weekly) ──
+                <div class="control-group">
+                    <label class="section-label">{move || lang.get().t().profile}</label>
+                    <div class="btn-group">
+                        {Profile::all().iter().map(|&p| {
+                            view! {
+                                <button
+                                    class=move || if profile.get() == Some(p) { "active" } else { "" }
+                                    on:click=move |_| on_profile.run(p)>
+                                    {move || p.label(lang.get())}
                                 </button>
                             }
                         }).collect_view()}

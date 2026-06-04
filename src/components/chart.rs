@@ -4,7 +4,7 @@ use leptos::prelude::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
-use crate::data::types::Interval;
+use crate::data::types::{Interval, Profile};
 use crate::i18n::Lang;
 
 #[derive(Clone, PartialEq)]
@@ -97,16 +97,28 @@ impl ChartGeom {
     }
 }
 
-fn compute_geom(s: &[Series], pad_l: f64, pad_t: f64, w: f64, h: f64) -> Option<ChartGeom> {
+fn compute_geom(
+    s: &[Series],
+    x_range: Option<(DateTime<Utc>, DateTime<Utc>)>,
+    pad_l: f64,
+    pad_t: f64,
+    w: f64,
+    h: f64,
+) -> Option<ChartGeom> {
     if s.is_empty() || s.iter().all(|ser| ser.points.is_empty()) {
         return None;
     }
-    let xs: Vec<i64> = s
-        .iter()
-        .flat_map(|ser| ser.points.iter().map(|(t, _)| t.timestamp()))
-        .collect();
-    let x_min = *xs.iter().min().unwrap() as f64;
-    let x_max = *xs.iter().max().unwrap() as f64;
+    // A fixed range (profile modes) overrides the data-derived x extent.
+    let (x_min, x_max) = match x_range {
+        Some((lo, hi)) => (lo.timestamp() as f64, hi.timestamp() as f64),
+        None => {
+            let xs: Vec<i64> = s
+                .iter()
+                .flat_map(|ser| ser.points.iter().map(|(t, _)| t.timestamp()))
+                .collect();
+            (*xs.iter().min().unwrap() as f64, *xs.iter().max().unwrap() as f64)
+        }
+    };
     // Concentrations can be near-zero but never negative; anchor at 0.
     let y_min = 0.0_f64;
     let y_max = s
@@ -146,12 +158,26 @@ struct HoverRow {
     point_y: f64,
 }
 
-/// Tooltip lead-in date. Hour interval surfaces Montréal local time; coarser
-/// intervals drop the time (the bucket's hour is just an artifact of bucketing).
-fn format_hover_date(ts: DateTime<Utc>, interval: Interval) -> String {
-    match interval {
-        Interval::Hour => ts.with_timezone(&MontrealTz).format("%Y-%m-%d %H:%M %Z").to_string(),
-        _ => ts.format("%Y-%m-%d").to_string(),
+/// Tooltip lead-in. Profiles label by their synthetic base (hour-of-day or
+/// weekday); otherwise Hour interval shows Montréal-local time and coarser
+/// intervals show the date.
+fn format_hover_date(
+    ts: DateTime<Utc>,
+    interval: Interval,
+    profile: Option<Profile>,
+    x_min: f64,
+    lang: Lang,
+) -> String {
+    match profile {
+        Some(Profile::Weekday) | Some(Profile::Weekend) => ts.format("%H:%M").to_string(),
+        Some(Profile::Weekly) => {
+            let d = (((ts.timestamp() as f64 - x_min) / 86_400.0).round() as i64).rem_euclid(7) as usize;
+            lang.t().dow[d].to_string()
+        }
+        None => match interval {
+            Interval::Hour => ts.with_timezone(&MontrealTz).format("%Y-%m-%d %H:%M %Z").to_string(),
+            _ => ts.format("%Y-%m-%d").to_string(),
+        },
     }
 }
 
@@ -284,6 +310,11 @@ pub fn Chart(
     /// Human-readable selection summary (station · substance · interval · dates),
     /// shown above the plot and embedded in the PNG export.
     caption: Signal<String>,
+    /// Active averaging profile (None = ordinary time series) — switches the
+    /// x-axis to a 24-hour (diurnal) or 7-day (weekly) synthetic base.
+    profile: Signal<Option<Profile>>,
+    /// Fixed x-axis range; `Some` in profile modes, `None` otherwise.
+    x_range: Signal<Option<(DateTime<Utc>, DateTime<Utc>)>>,
 ) -> impl IntoView {
     let lang = use_context::<ReadSignal<Lang>>().expect("Lang context not provided");
     let view_box = "0 0 900 400";
@@ -302,10 +333,13 @@ pub fn Chart(
     let derived = move || {
         let s = series.get();
         let res = interval.get();
-        let g = compute_geom(&s, pad_l, pad_t, w, h)?;
+        let prof = profile.get();
+        let xr = x_range.get();
+        let g = compute_geom(&s, xr, pad_l, pad_t, w, h)?;
         let y_max = g.y_min + g.y_span;
         let base_y = g.to_y(g.y_min);
-        let gap_threshold = gap_threshold_secs(res);
+        // Profiles are dense contiguous folds — never break the line.
+        let gap_threshold = if prof.is_some() { i64::MAX } else { gap_threshold_secs(res) };
 
         let paths: Vec<(String, String, String, String)> = s
             .iter()
@@ -361,29 +395,46 @@ pub fn Chart(
             })
             .collect();
 
-        let max_points = s.iter().map(|ser| ser.points.len()).max().unwrap_or(0);
-        let x_tick_n = 7.min(max_points);
-        let x_ticks: Vec<(f64, String)> = if x_tick_n == 0 {
-            vec![]
-        } else {
-            (0..=x_tick_n)
+        let l = lang.get();
+        let x_ticks: Vec<(f64, String)> = match prof {
+            // Diurnal: 00:00 … 24:00 by raw fraction of the day, on round hours.
+            Some(Profile::Weekday) | Some(Profile::Weekend) => (0..=6)
                 .map(|i| {
-                    let ts = (g.x_min + g.x_span * i as f64 / x_tick_n as f64) as i64;
-                    let x = g.to_x(ts);
-                    // Pick a tick label format that stays legible across scales:
-                    // include the year on long (Month/Year) spans, drop it on short ones.
-                    let span_days = g.x_span / 86_400.0;
-                    let label = DateTime::from_timestamp(ts, 0)
-                        .map(|dt: DateTime<Utc>| match res {
-                            Interval::Hour => dt.with_timezone(&MontrealTz).format("%b %-d %H:%M").to_string(),
-                            Interval::Year => dt.format("%Y").to_string(),
-                            _ if span_days > 800.0 => dt.format("%b %Y").to_string(),
-                            _ => dt.format("%b %-d").to_string(),
-                        })
-                        .unwrap_or_default();
-                    (x, label)
+                    let hr = i * 4;
+                    (g.pad_l + (hr as f64 / 24.0) * g.w, format!("{hr:02}:00"))
                 })
-                .collect()
+                .collect(),
+            // Weekly: one label per weekday, centred in its day cell.
+            Some(Profile::Weekly) => (0..7)
+                .map(|d| {
+                    let ts = (g.x_min + (d as f64 + 0.5) * 86_400.0) as i64;
+                    (g.to_x(ts), l.t().dow[d].to_string())
+                })
+                .collect(),
+            None => {
+                let max_points = s.iter().map(|ser| ser.points.len()).max().unwrap_or(0);
+                let x_tick_n = 7.min(max_points);
+                if x_tick_n == 0 {
+                    vec![]
+                } else {
+                    let span_days = g.x_span / 86_400.0;
+                    (0..=x_tick_n)
+                        .map(|i| {
+                            let ts = (g.x_min + g.x_span * i as f64 / x_tick_n as f64) as i64;
+                            let x = g.to_x(ts);
+                            let label = DateTime::from_timestamp(ts, 0)
+                                .map(|dt: DateTime<Utc>| match res {
+                                    Interval::Hour => dt.with_timezone(&MontrealTz).format("%b %-d %H:%M").to_string(),
+                                    Interval::Year => dt.format("%Y").to_string(),
+                                    _ if span_days > 800.0 => dt.format("%b %Y").to_string(),
+                                    _ => dt.format("%b %-d").to_string(),
+                                })
+                                .unwrap_or_default();
+                            (x, label)
+                        })
+                        .collect()
+                }
+            }
         };
 
         // Acceptability reference lines that fall within the visible y-range.
@@ -399,7 +450,7 @@ pub fn Chart(
 
     let compute_hover = move |client_x: f64, client_y: f64, rect: web_sys::DomRect, force_flip_y: bool| -> Option<HoverInfo> {
         let s = series.get();
-        let g = compute_geom(&s, pad_l, pad_t, w, h)?;
+        let g = compute_geom(&s, x_range.get(), pad_l, pad_t, w, h)?;
 
         let frac_x = ((client_x - rect.left()) / rect.width().max(1.0)).clamp(0.0, 1.0);
         let frac_y = ((client_y - rect.top()) / rect.height().max(1.0)).clamp(0.0, 1.0);
@@ -656,8 +707,10 @@ pub fn Chart(
 
             {move || hover.get().map(|hi| {
                 let res = interval.get();
+                let prof = profile.get();
+                let x_min = x_range.get().map(|(lo, _)| lo.timestamp() as f64).unwrap_or(0.0);
                 let date = hi.rows.first()
-                    .map(|r| format_hover_date(r.timestamp, res))
+                    .map(|r| format_hover_date(r.timestamp, res, prof, x_min, lang.get()))
                     .unwrap_or_default();
                 let tx = if hi.flip_x { "calc(-100% - 14px)" } else { "14px" };
                 let ty = if hi.flip_y { "calc(-100% - 14px)" } else { "14px" };

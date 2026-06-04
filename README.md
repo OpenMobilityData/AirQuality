@@ -25,7 +25,11 @@ only static files.
    **substance**, and **aggregation interval** (Hour / Day / Week / Month / Year),
    over ranges up to the full 1986–2024 record, with a hover crosshair tooltip and
    PNG export. Long-range views (Day and coarser) use a daily-resolution tier; the
-   Hour interval pulls hourly detail for the years in view.
+   Hour interval pulls hourly detail for the years in view. An optional **averaging
+   profile** folds the selected range onto a short repeating base: **Weekday** and
+   **Weekend** show the mean 24-hour diurnal cycle (from hourly data, so limited to
+   the in-range hourly years), and **Weekly** shows the mean for each day of the
+   week (Mon–Sun, from the daily tier, spanning the whole range).
 3. **Network** — a bilingual long-form explainer on the RSQA monitoring network
    (coverage, pollutants, history, data caveats) with cited sources.
 4. **Methodology** — this site's data sources (with attribution) and the exact
