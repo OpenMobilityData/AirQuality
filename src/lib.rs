@@ -33,12 +33,13 @@ pub fn main() {
     leptos::mount::mount_to_body(App);
 }
 
-/// Preferred default substance when the current one is unavailable: PM2.5
-/// (measured at every station, all years), then the IQA index, else the first.
+/// Preferred default substance when the current one is unavailable: NO (a
+/// primary, traffic-emitted pollutant that stays well localized near sources),
+/// then PM2.5 (measured everywhere), then the first available option.
 fn default_substance(opts: &[String]) -> String {
     opts.iter()
-        .find(|s| s.as_str() == "PM2.5")
-        .or_else(|| opts.iter().find(|s| s.as_str() == "IQA"))
+        .find(|s| s.as_str() == "NO")
+        .or_else(|| opts.iter().find(|s| s.as_str() == "PM2.5"))
         .or_else(|| opts.first())
         .cloned()
         .unwrap_or_default()
@@ -66,7 +67,7 @@ fn App() -> impl IntoView {
 
     // ── UI state ──
     let (view, set_view) = signal(View::Map);
-    let (selected_substance, set_selected_substance) = signal(String::from("PM2.5"));
+    let (selected_substance, set_selected_substance) = signal(String::from("NO"));
     let (stat, set_stat) = signal(Stat::Mean);
     // Map summary range: an inclusive [from, to] window of years. Defaults to
     // the whole record (set from meta), so the map opens on the full overview.
