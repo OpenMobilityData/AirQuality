@@ -6,6 +6,10 @@
 # Local Claude Code settings (not shared).
 /.claude/
 
+# animate.py outputs + basemap tile cache (generated locally).
+/anim/
+/scripts/.tilecache/
+
 # Raw source CSVs are large and re-downloadable; the preprocessor's
 # compact outputs under static/data/ are committed instead.
 /data-src/

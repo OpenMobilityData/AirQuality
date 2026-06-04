@@ -127,6 +127,7 @@ src/
 scripts/
   fetch-archive.sh    Download the 1986–2024 archive + IQA bundles into data-src/
   preprocess.py       Raw CSVs → compact JSON (schema-tolerant, all years)
+  animate.py          Local: render map-overlay animation frames + MP4 per time bucket
   deploy.sh           [--download] + preprocess + trunk build --release + rsync
 data-src/             Raw input CSVs (git-ignored; re-downloadable)
 static/
@@ -163,6 +164,31 @@ vhost). Override with `AIRQUALITY_REMOTE` / `AIRQUALITY_DEST`.
 When the City publishes a new year, add its resource URL to `fetch-archive.sh`,
 then `./scripts/deploy.sh --download` regenerates and ships it — a server cron
 could automate this, as the live BikeStat feeds do.
+
+## Animations (local tool)
+
+`scripts/animate.py` renders a time-series of map frames — one per time bucket,
+each the bucket-mean of a substance/index IDW-interpolated over the island — and
+stitches them into an MP4. It's a **local-only** tool (not part of the WASM
+build): it mirrors the web map's rendering (CARTO basemap, the same colour ramps
+/ IQA bands, coverage fade, markers, colour-bar) on a **colour scale fixed across
+all frames** so change over time is readable, and stamps each frame with its
+date. It reads the committed daily tier, so day/week/month/year buckets work
+without the raw archive.
+
+```bash
+pip3 install pillow numpy            # one-time (ffmpeg optional, for MP4)
+python3 scripts/animate.py --substance PM2.5 --bucket week --from 2023-01-01 --to 2023-12-31
+python3 scripts/animate.py --substance IQA   --bucket month
+python3 scripts/animate.py --substance O3    --bucket week --from 2024-01-01
+```
+
+`--bucket` is `week` (default) / `month` / `year` / `<N>d`; `--from`/`--to`
+default to the substance's full extent (weekly over 1986–2024 is ~2,000 frames,
+so narrow the range or use a bigger bucket). Other flags: `--fps`,
+`--width`/`--height`, `--vmin`/`--vmax` (pin the scale), `--no-basemap`,
+`--out`. Output lands in `anim/<substance>_<bucket>/frame_NNNNN.png` plus an MP4
+(both git-ignored); basemap tiles are cached under `scripts/.tilecache/`.
 
 ## Attribution
 
