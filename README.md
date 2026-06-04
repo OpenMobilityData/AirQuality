@@ -155,15 +155,21 @@ regenerate data or to produce the hourly tier for the Hour interval.
 ## Deployment
 
 ```bash
-./scripts/deploy.sh            # build + rsync (uses whatever is in data-src/)
-./scripts/deploy.sh --download # also fetch/refresh the archive first
+./scripts/deploy.sh            # code-only: build + rsync the app (fast)
+./scripts/deploy.sh --data     # also regenerate + sync the data
+./scripts/deploy.sh --download # fetch/refresh the raw archive first, then --data
 ```
 
-Runs `fetch-archive.sh` when `--download` is given, regenerates the compact data
-from `data-src/` when present, builds `trunk build --release`, and rsyncs `dist/`
-(including the hourly tier) to `mtl-aq.org` (default
-`rhoge@bikestat.org:/var/www/mtl-aq/`, the same VPS as BikeStat under its own
-vhost). Override with `AIRQUALITY_REMOTE` / `AIRQUALITY_DEST`.
+Default deploys are **code-only**: they build `trunk build --release` and rsync
+`dist/` while leaving the data already on the server in place — they don't re-run
+`preprocess.py` or touch the large data tiers (the hourly series alone is
+~250 MB), so a code change ships quickly. `--data` regenerates `static/data` from
+`data-src/` and syncs it with `rsync --checksum` (preprocess rewrites every file
+each run, so a checksum compare avoids re-sending the byte-identical ones — only a
+newly-added year and the summaries actually transfer). `--download` fetches the
+raw archive first. Target defaults to `rhoge@bikestat.org:/var/www/mtl-aq/` (the
+same VPS as BikeStat, own vhost); override with `AIRQUALITY_REMOTE` /
+`AIRQUALITY_DEST`.
 
 When the City publishes a new year, add its resource URL to `fetch-archive.sh`,
 then `./scripts/deploy.sh --download` regenerates and ships it — a server cron
