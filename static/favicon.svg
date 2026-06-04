@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#1a1a2e"/>
+  <!-- Air-quality gradient swatch with three sensor dots -->
+  <defs>
+    <linearGradient id="aq" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0"   stop-color="#2c7bb6"/>
+      <stop offset="0.5" stop-color="#ffff8c"/>
+      <stop offset="1"   stop-color="#d7191c"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="24" height="24" rx="3" fill="url(#aq)" opacity="0.85"/>
+  <circle cx="11" cy="21" r="2.4" fill="#0d1b2a"/>
+  <circle cx="19" cy="13" r="2.4" fill="#0d1b2a"/>
+  <circle cx="23" cy="22" r="2.4" fill="#0d1b2a"/>
+</svg>

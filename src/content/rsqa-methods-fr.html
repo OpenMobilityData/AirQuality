@@ -1,0 +1,177 @@
+<header>
+  <h1>Sources de données et méthodologie</h1>
+  <p>
+    Cette page documente la provenance des données du site et la façon exacte dont elles sont
+    transformées en cartes et en graphiques. Il s'agit d'une visualisation indépendante, et non
+    d'un produit officiel de la Ville de Montréal&nbsp;; toutes les mesures sont celles de la
+    Ville, rediffusées ici sous licence ouverte. Pour le contexte sur le réseau de surveillance
+    lui-même — son histoire, sa couverture et pourquoi les stations ne mesurent pas les mêmes
+    polluants — voir la page <strong>Réseau</strong>.
+  </p>
+</header>
+
+<section>
+  <h2>Sources de données</h2>
+  <p>
+    Trois jeux de données ouverts du portail de la Ville de Montréal alimentent l'application.
+    Tous sont récupérés directement à partir de leurs URL de <em>téléchargement</em> publiées,
+    sans extraction de chemins restreints.
+  </p>
+  <ul>
+    <li>
+      <strong>Concentrations horaires multi-polluants</strong> — les relevés horaires par
+      station pour chaque substance.
+      <a href="https://donnees.montreal.ca/dataset/rsqa-polluants-gazeux" target="_blank" rel="noopener noreferrer">RSQA — Multi-Polluants (en continu)</a>.
+    </li>
+    <li>
+      <strong>Liste des stations</strong> — noms, adresses, arrondissements et coordonnées
+      (latitude/longitude) utilisées pour positionner les marqueurs.
+      <a href="https://donnees.montreal.ca/dataset/rsqa-liste-des-stations" target="_blank" rel="noopener noreferrer">RSQA — Liste des stations</a>.
+    </li>
+    <li>
+      <strong>Indice de la qualité de l'air (IQA)</strong> — les sous-indices par polluant
+      pré-calculés par la Ville (la ressource <em>détaillé par station</em>).
+      <a href="https://donnees.montreal.ca/dataset/rsqa-iqa-historique" target="_blank" rel="noopener noreferrer">RSQA — Indice de la qualité de l'air</a>.
+    </li>
+  </ul>
+  <p>
+    Les tuiles de fond de carte sont © les contributeurs d'<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>,
+    stylisées par <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>.
+    Les données du RSQA sont © Ville de Montréal, diffusées sous licence
+    <a href="https://creativecommons.org/licenses/by/4.0/deed.fr" target="_blank" rel="noopener noreferrer">Creative Commons CC-BY&nbsp;4.0</a>.
+    Un aperçu général du réseau se trouve sur le site de la Ville&nbsp;:
+    <a href="https://montreal.ca/articles/surveillance-de-la-qualite-de-lair-montreal-8820" target="_blank" rel="noopener noreferrer">Surveillance de la qualité de l'air à Montréal</a>.
+  </p>
+</section>
+
+<section>
+  <h2>Portée et nettoyage</h2>
+  <p>
+    La version couvre l'<strong>ensemble de l'archive publiée, 1986–2024</strong> — chaque fichier
+    annuel diffusé par la Ville. Une étape de prétraitement ingère les 39 années et les convertit en
+    fichiers compacts, de sorte que le navigateur ne télécharge que ce dont chaque vue a besoin&nbsp;:
+    un petit résumé par année pour la carte, une série quotidienne par station pour les graphiques de
+    longue durée, et le détail horaire par station-année chargé à la demande.
+  </p>
+  <ul>
+    <li>
+      <strong>La dérive des schémas est absorbée.</strong> Sur quatre décennies, les fichiers
+      varient — les noms des colonnes de station et d'horodatage changent, les graphies des polluants
+      diffèrent (<em>PM25</em>, <em>PM2.5</em>, <em>PM2,5</em>), certaines années séparent la date et
+      l'heure en deux colonnes ou ajoutent une colonne de nom de station, et quelques-unes comportent
+      une ligne vide en tête. L'analyseur détecte les colonnes par leur nom plutôt que par leur
+      position et normalise les graphies vers un seul catalogue.
+    </li>
+    <li>
+      Les <strong>horodatages</strong> sont interprétés dans le format de chaque époque et stockés en
+      UTC&nbsp;; le graphique affiche ensuite l'heure locale de Montréal. Les fichiers jusqu'en 2012
+      étiquettent le <em>début</em> de l'heure&nbsp;; à partir de 2013, la <em>fin</em> (où
+      <em>24:00</em> désigne minuit le lendemain). Cette différence d'étiquetage d'au plus une heure
+      est sans conséquence aux échelles jour/mois/année. Les données sont aussi en heure normale de
+      l'Est toute l'année (le décalage estival d'une heure noté sur la page Réseau).
+    </li>
+    <li>
+      Les <strong>cellules non numériques sont exclues.</strong> Les indicateurs d'état des
+      appareils (<em>down</em>, <em>alarm</em>, <em>InVld</em>, états d'étalonnage, pertes de
+      communication, et <em>N/M</em> ou vide pour « non mesuré ») sont traités comme des données
+      manquantes plutôt que comme des valeurs.
+    </li>
+    <li>
+      <strong>L'ensemble des stations et des polluants évolue.</strong> Des stations ouvrent et
+      ferment au fil des décennies et les appareils sont ajoutés ou retirés (des métriques anciennes
+      comme le coefficient d'opacité n'apparaissent qu'au début&nbsp;; le carbone suie à partir de
+      2017, les particules ultrafines à partir de 2021). Le sélecteur d'année de la carte n'affiche
+      que les stations et substances ayant transmis des données l'année choisie, et quelques stations
+      historiques fermées sans coordonnées publiées sont omises de la carte.
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>Agrégation</h2>
+  <p>
+    Comme il s'agit de concentrations et non de comptages, les valeurs sont combinées par
+    <strong>moyenne</strong>, et non par somme.
+  </p>
+  <ul>
+    <li>
+      <strong>Série temporelle</strong> — chaque intervalle Heure / Jour / Semaine / Mois affiche
+      la <em>moyenne</em> des relevés horaires qui s'y trouvent. Les intervalles partiels en début
+      et en fin (Semaine et Mois) sont retirés pour que la courbe ne chute pas sur une période
+      incomplète, et les trous de plus d'un intervalle interrompent la courbe au lieu d'interpoler.
+    </li>
+    <li>
+      <strong>Carte</strong> — le marqueur de chaque station et la surface interpolée utilisent la
+      <em>moyenne</em>, la <em>médiane</em>, le <em>maximum</em> ou le <em>minimum</em> sur toute
+      l'année, selon votre choix. La médiane résiste aux courtes pointes qui tirent la moyenne vers
+      le haut.
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>L'indice de la qualité de l'air (IQA)</h2>
+  <p>
+    L'IQA présenté ici est l'indice officiel de la Ville, et non un nouveau calcul&nbsp;: le
+    fichier source fournit le sous-indice de chaque polluant par station et par heure, et l'indice
+    de la station est le <strong>maximum parmi les polluants</strong> pour cette heure — la
+    définition officielle. Aucune conversion d'unités ni constante de référence n'est introduite.
+  </p>
+  <p>
+    <strong>Plus la valeur est élevée, plus l'air est pollué.</strong> L'indice repose sur trois
+    plages d'acceptabilité&nbsp;: <strong>0–25 bon</strong>, <strong>26–50 acceptable</strong> et
+    <strong>au-delà de 50 mauvais</strong>. Sur la carte, l'IQA est coloré sur cette échelle
+    absolue (vert → jaune → rouge) plutôt que sur l'échelle relative utilisée pour les
+    concentrations brutes, de sorte qu'une couleur signifie la même chose à chaque station et pour
+    chaque statistique&nbsp;; la légende montre les plages. Sur le graphique temporel, des lignes
+    de référence pointillées marquent les seuils de 25 et de 50.
+  </p>
+  <p>
+    Chaque marqueur de la carte nomme aussi le <strong>polluant dominant</strong>&nbsp;: sous la
+    statistique Maximum, le polluant responsable de la pire heure de la station&nbsp;; sinon le
+    polluant qui a dominé l'indice durant la plus grande proportion d'heures de l'année, avec
+    cette proportion. En 2024, l'ozone a dominé l'indice la plupart des heures, mais les pires
+    pointes étaient des épisodes de particules fines (PM2,5).
+  </p>
+  <p>
+    <strong>L'indice est un indicateur sanitaire régional, et non un outil d'attribution des
+    sources.</strong> Ses composantes dominantes — l'ozone et les particules fines — sont en grande
+    partie des polluants <em>secondaires</em> qui se forment dans l'atmosphère en aval de leurs
+    précurseurs, sur des heures et des dizaines de kilomètres. L'IQA caractérise donc le bassin
+    atmosphérique dans son ensemble plutôt que les émissions de proximité&nbsp;: il ne peut pas — et
+    n'a pas été conçu pour — isoler une source locale comme le corridor Décarie. Les questions de
+    proximité routière trouvent de meilleures réponses dans les marqueurs émis directement (NO,
+    NO₂, carbone suie, particules ultrafines), ce qui explique en partie pourquoi le réseau déploie
+    ces appareils de façon sélective (voir la page Réseau).
+  </p>
+  <p>
+    <em>Une nuance pour la comparaison avec les bilans officiels&nbsp;:</em> l'application agrège
+    chaque mesure par moyenne d'intervalle&nbsp;; un IQA « quotidien » est donc ici la moyenne de
+    l'indice horaire, et non le maximum quotidien que certains organismes rapportent. Utilisez la
+    statistique Maximum de la carte pour une lecture du pire cas. La Ville a commencé à publier
+    l'indice en 2007&nbsp;; l'IQA est donc disponible à partir de 2007, les années antérieures
+    n'affichant que les polluants mesurés.
+  </p>
+</section>
+
+<section>
+  <h2>La surface interpolée de la carte</h2>
+  <p>
+    Les stations sont des points épars&nbsp;; la surface colorée est donc une
+    <strong>interpolation par pondération inverse à la distance (IDW)</strong>&nbsp;: chaque pixel
+    mélange les valeurs des stations en accordant plus de poids aux stations proches. Pour éviter
+    de laisser croire à une certitude là où il n'y a pas de capteurs, l'<strong>opacité de la
+    surface diminue avec la distance</strong> à la station la plus proche et disparaît au bout de
+    quelques kilomètres. Une substance mesurée à une seule station (par exemple le benzène) montre
+    ce seul marqueur sans surface, puisqu'il n'y a rien à interpoler.
+  </p>
+</section>
+
+<section>
+  <h2>Notes et limites</h2>
+  <ul>
+    <li>Il s'agit d'une visualisation non officielle&nbsp;; pour des chiffres faisant autorité, consultez les publications de la Ville et les jeux de données ouverts liés ci-dessus.</li>
+    <li>La couverture est inégale par conception — voir la page Réseau — de sorte que les comparaisons entre stations n'ont de sens que pour les substances mesurées par plusieurs stations.</li>
+    <li>Les comparaisons de longue durée doivent tenir compte de l'évolution du réseau&nbsp;: les changements de stations, d'appareils et d'implantation entre 1986 et 2024 font que les tendances reflètent à la fois une évolution réelle de la qualité de l'air et une évolution de la surveillance.</li>
+  </ul>
+</section>

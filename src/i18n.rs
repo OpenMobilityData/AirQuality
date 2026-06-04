@@ -1,0 +1,267 @@
+//! In-app i18n for English / French.
+//!
+//! Every user-facing string lives as a `&'static str` field on `T`, with one
+//! `const` instance per language (`EN`, `FR`). Lookup is `lang.t().field` —
+//! typos and missing fields are compile errors. Pollutant display names come
+//! from `data::pollutants`, not from here.
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Lang {
+    En,
+    Fr,
+}
+
+impl Lang {
+    const STORAGE_KEY: &'static str = "airquality-lang";
+
+    /// Initial language: stored preference if set, else navigator.language
+    /// (anything starting with "fr" → French), else English.
+    pub fn from_browser() -> Self {
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                if let Ok(Some(s)) = storage.get_item(Self::STORAGE_KEY) {
+                    if s == "fr" {
+                        return Self::Fr;
+                    }
+                    if s == "en" {
+                        return Self::En;
+                    }
+                }
+            }
+            let nav_lang = window.navigator().language().unwrap_or_default();
+            if nav_lang.to_lowercase().starts_with("fr") {
+                return Self::Fr;
+            }
+        }
+        Self::En
+    }
+
+    pub fn store(self) {
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                let _ = storage.set_item(Self::STORAGE_KEY, self.code());
+            }
+        }
+    }
+
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::En => "en",
+            Self::Fr => "fr",
+        }
+    }
+
+    pub fn other(self) -> Self {
+        match self {
+            Self::En => Self::Fr,
+            Self::Fr => Self::En,
+        }
+    }
+
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Self::En => "EN",
+            Self::Fr => "FR",
+        }
+    }
+
+    pub fn t(self) -> &'static T {
+        match self {
+            Self::En => &EN,
+            Self::Fr => &FR,
+        }
+    }
+}
+
+pub struct T {
+    // Header / chrome
+    pub subtitle: &'static str,
+    pub view_map: &'static str,
+    pub view_series: &'static str,
+    pub view_network: &'static str,
+    pub view_methods: &'static str,
+    pub mobile_filters: &'static str,
+    pub mobile_close: &'static str,
+    pub data_prefix: &'static str,
+    pub generated: &'static str,
+    pub latest_year_label: &'static str,
+
+    // Section labels
+    pub substance: &'static str,
+    pub statistic: &'static str,
+    pub station: &'static str,
+    pub interval: &'static str,
+    pub date_range: &'static str,
+    pub custom_range: &'static str,
+    pub year: &'static str,
+    pub year_range: &'static str,
+    pub all_years: &'static str,
+    pub latest_year: &'static str,
+
+    // Stats
+    pub stat_mean: &'static str,
+    pub stat_median: &'static str,
+    pub stat_max: &'static str,
+    pub stat_min: &'static str,
+
+    // Intervals
+    pub hour: &'static str,
+    pub day: &'static str,
+    pub week: &'static str,
+    pub month: &'static str,
+
+    // Date presets
+    pub last_year: &'static str,
+    pub last_5_years: &'static str,
+    pub last_10_years: &'static str,
+    pub last_3_months: &'static str,
+    pub range_too_short: &'static str,
+
+    // Map
+    pub loading_stations: &'static str,
+    pub click_marker: &'static str,
+    pub no_data_substance: &'static str,
+    pub stations_measuring: &'static str,
+    pub iqa_main_driver: &'static str,
+    pub iqa_peak_driver: &'static str,
+    pub iqa_good: &'static str,
+    pub iqa_acceptable: &'static str,
+    pub iqa_poor: &'static str,
+    pub iqa_higher_worse: &'static str,
+
+    // Placeholders
+    pub select_station_desktop: &'static str,
+    pub select_station_mobile: &'static str,
+
+    // Chart legend / export
+    pub leg_mean: &'static str,
+    pub leg_min: &'static str,
+    pub leg_max: &'static str,
+    pub download_chart_png: &'static str,
+    pub copy_chart_to_clipboard: &'static str,
+    pub copied_to_clipboard: &'static str,
+}
+
+pub const EN: T = T {
+    subtitle: "Montréal air-quality visualizer",
+    view_map: "Map",
+    view_series: "Time series",
+    view_network: "Network",
+    view_methods: "Methodology",
+    mobile_filters: "Filters",
+    mobile_close: "Close",
+    data_prefix: "RSQA data",
+    generated: "Generated",
+    latest_year_label: "Latest available year",
+
+    substance: "Substance",
+    statistic: "Statistic",
+    station: "Station",
+    interval: "Aggregation",
+    date_range: "Date range",
+    custom_range: "Custom range",
+    year: "Year",
+    year_range: "Year range",
+    all_years: "All years",
+    latest_year: "Latest Year",
+
+    stat_mean: "Mean",
+    stat_median: "Median",
+    stat_max: "Maximum",
+    stat_min: "Minimum",
+
+    hour: "Hour",
+    day: "Day",
+    week: "Week",
+    month: "Month",
+
+    last_year: "Last Year",
+    last_5_years: "Last 5 Years",
+    last_10_years: "Last 10 Years",
+    last_3_months: "Last 3 Months",
+    range_too_short: "Range too short for interval",
+
+    loading_stations: "Loading stations…",
+    click_marker: "Hover a station for its exact value",
+    no_data_substance: "not measured at this station",
+    stations_measuring: "stations measuring",
+    iqa_main_driver: "Main driver",
+    iqa_peak_driver: "Peak driver",
+    iqa_good: "Good",
+    iqa_acceptable: "Acceptable",
+    iqa_poor: "Poor",
+    iqa_higher_worse: "Higher = worse air quality",
+
+    select_station_desktop: "Select a station and substance from the sidebar to view its time series",
+    select_station_mobile: "Select a station and substance from the Filters menu to view its time series",
+
+    leg_mean: "mean",
+    leg_min: "min",
+    leg_max: "max",
+    download_chart_png: "Download chart as PNG",
+    copy_chart_to_clipboard: "Copy chart to clipboard",
+    copied_to_clipboard: "Copied!",
+};
+
+pub const FR: T = T {
+    subtitle: "Visualiseur de la qualité de l'air à Montréal",
+    view_map: "Carte",
+    view_series: "Série temporelle",
+    view_network: "Réseau",
+    view_methods: "Méthodologie",
+    mobile_filters: "Filtres",
+    mobile_close: "Fermer",
+    data_prefix: "Données RSQA",
+    generated: "Généré",
+    latest_year_label: "Dernière année disponible",
+
+    substance: "Substance",
+    statistic: "Statistique",
+    station: "Station",
+    interval: "Agrégation",
+    date_range: "Plage de dates",
+    custom_range: "Plage personnalisée",
+    year: "Année",
+    year_range: "Plage d'années",
+    all_years: "Toutes les années",
+    latest_year: "Dernière année",
+
+    stat_mean: "Moyenne",
+    stat_median: "Médiane",
+    stat_max: "Maximum",
+    stat_min: "Minimum",
+
+    hour: "Heure",
+    day: "Jour",
+    week: "Semaine",
+    month: "Mois",
+
+    last_year: "Année dernière",
+    last_5_years: "5 dernières années",
+    last_10_years: "10 dernières années",
+    last_3_months: "3 derniers mois",
+    range_too_short: "Plage trop courte pour l'agrégation",
+
+    loading_stations: "Chargement des stations…",
+    click_marker: "Survolez une station pour sa valeur exacte",
+    no_data_substance: "non mesurée à cette station",
+    stations_measuring: "stations mesurant",
+    iqa_main_driver: "Polluant dominant",
+    iqa_peak_driver: "Polluant au pic",
+    iqa_good: "Bon",
+    iqa_acceptable: "Acceptable",
+    iqa_poor: "Mauvais",
+    iqa_higher_worse: "Valeur élevée = air plus pollué",
+
+    select_station_desktop: "Sélectionnez une station et une substance dans la barre latérale pour afficher la série temporelle",
+    select_station_mobile: "Sélectionnez une station et une substance dans le menu Filtres pour afficher la série temporelle",
+
+    leg_mean: "moy",
+    leg_min: "min",
+    leg_max: "max",
+    download_chart_png: "Télécharger le graphique en PNG",
+    copy_chart_to_clipboard: "Copier le graphique dans le presse-papiers",
+    copied_to_clipboard: "Copié !",
+};

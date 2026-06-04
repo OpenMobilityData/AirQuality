@@ -1,0 +1,169 @@
+<header>
+  <h1>Data sources &amp; methodology</h1>
+  <p>
+    This page documents where the data on this site comes from and exactly how it is
+    processed into the maps and charts you see. It is an independent visualization, not an
+    official product of the Ville de Montréal; all measurements are the City's, redistributed
+    here under an open licence. For background on the monitoring network itself — its history,
+    coverage, and why stations measure different things — see the <strong>Network</strong> page.
+  </p>
+</header>
+
+<section>
+  <h2>Data sources</h2>
+  <p>
+    Three open datasets from the Ville de Montréal portal feed this application. All are
+    fetched directly from their published <em>download</em> URLs; no scraping of restricted
+    paths is involved.
+  </p>
+  <ul>
+    <li>
+      <strong>Multi-pollutant hourly concentrations</strong> — the per-station hourly readings
+      for each substance.
+      <a href="https://donnees.montreal.ca/dataset/rsqa-polluants-gazeux" target="_blank" rel="noopener noreferrer">RSQA — Multi-Polluants (en continu)</a>.
+    </li>
+    <li>
+      <strong>Station list</strong> — names, addresses, boroughs, and the latitude/longitude
+      used to place the map markers.
+      <a href="https://donnees.montreal.ca/dataset/rsqa-liste-des-stations" target="_blank" rel="noopener noreferrer">RSQA — Liste des stations</a>.
+    </li>
+    <li>
+      <strong>Air Quality Index (IQA)</strong> — the City's pre-computed per-pollutant
+      sub-indices (the <em>détaillé par station</em> resource).
+      <a href="https://donnees.montreal.ca/dataset/rsqa-iqa-historique" target="_blank" rel="noopener noreferrer">RSQA — Indice de la qualité de l'air</a>.
+    </li>
+  </ul>
+  <p>
+    Base map tiles are © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>
+    contributors, styled by <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>.
+    The RSQA data is © Ville de Montréal, distributed under the
+    <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">Creative Commons CC-BY&nbsp;4.0</a> licence.
+    A general overview of the network is on the City site:
+    <a href="https://montreal.ca/en/articles/monitoring-air-quality-montreal-8820" target="_blank" rel="noopener noreferrer">Monitoring air quality in Montréal</a>.
+  </p>
+</section>
+
+<section>
+  <h2>Scope and cleaning</h2>
+  <p>
+    The build covers the <strong>full published archive, 1986–2024</strong> — every annual file
+    the City has released. A preprocessing step ingests all 39 years and turns them into compact
+    files so the browser downloads only what a given view needs: a small per-year summary for the
+    map, a daily-resolution series per station for long-range charts, and hourly detail per
+    station-year fetched on demand.
+  </p>
+  <ul>
+    <li>
+      <strong>Schema drift is absorbed.</strong> Across four decades the files vary — the station
+      and timestamp column names change, pollutant spellings differ (<em>PM25</em>, <em>PM2.5</em>,
+      <em>PM2,5</em>), some years split the date and hour into two columns or prepend a station-name
+      column, and a few have a stray leading blank line. The parser detects columns by name rather
+      than position and normalizes spellings to a single catalogue.
+    </li>
+    <li>
+      <strong>Timestamps</strong> are parsed in either era's format and stored as UTC, then the
+      chart displays Montréal local time. Files up to 2012 label the <em>start</em> of each hour;
+      from 2013 on they label the <em>end</em> (with <em>24:00</em> meaning next-day midnight).
+      That ≤1-hour labelling difference is immaterial at the day/month/year scales used for
+      long-range views. The open data is also in Eastern Standard Time year-round (the one-hour
+      summer offset noted on the Network page).
+    </li>
+    <li>
+      <strong>Non-numeric cells are excluded.</strong> Instrument status flags
+      (<em>down</em>, <em>alarm</em>, <em>InVld</em>, calibration states, communication losses,
+      and <em>N/M</em> / blank for "not measured") are treated as missing rather than as values.
+    </li>
+    <li>
+      <strong>The station set and pollutant suite evolve.</strong> Stations open and close over the
+      decades and instruments are added or retired (legacy metrics such as the coefficient of haze
+      appear only in early years; black carbon from 2017, ultrafine particles from 2021). The map's
+      year selector shows only the stations and substances that reported in the chosen year, and a
+      few closed historical stations without published coordinates are omitted from the map.
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>Aggregation</h2>
+  <p>
+    Because these are concentrations rather than counts, values are combined by
+    <strong>averaging</strong>, not summing.
+  </p>
+  <ul>
+    <li>
+      <strong>Time series</strong> — each Hour / Day / Week / Month bucket shows the
+      <em>mean</em> of the hourly readings that fall in it. Partial leading/trailing Week and
+      Month buckets are trimmed so the line never dips on a half-formed period, and gaps longer
+      than one bucket break the line rather than interpolating across missing data.
+    </li>
+    <li>
+      <strong>Map</strong> — each station's marker and the interpolated surface use the
+      <em>mean</em>, <em>median</em>, <em>maximum</em>, or <em>minimum</em> over the whole year,
+      whichever you select. The median is robust to the short spikes that pull the mean upward.
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>The Air Quality Index (IQA)</h2>
+  <p>
+    The IQA shown here is the City's official index, not a re-derivation: the source file
+    provides each pollutant's sub-index per station-hour, and the station's index is the
+    <strong>maximum across pollutants</strong> for that hour — the official definition. No unit
+    conversion or reference constants are introduced.
+  </p>
+  <p>
+    <strong>Higher means worse.</strong> The index runs on three acceptability bands:
+    <strong>0–25 good</strong>, <strong>26–50 acceptable</strong>, and <strong>above 50 poor</strong>.
+    On the map the IQA is coloured on this absolute scale (green → yellow → red) rather than the
+    relative scale used for raw concentrations, so a colour means the same thing at every station
+    and statistic; the legend shows the bands. On the time-series chart, dashed reference lines
+    mark the 25 and 50 thresholds.
+  </p>
+  <p>
+    Each map marker also names the <strong>driving pollutant</strong>: under the Maximum
+    statistic, the pollutant responsible for that station's single worst hour; otherwise the
+    pollutant that drove the index in the largest share of hours over the year, with that share.
+    In 2024 ozone drove the index most hours, but the worst peaks were fine-particle (PM2.5)
+    episodes.
+  </p>
+  <p>
+    <strong>The index is a regional health indicator, not a source-attribution tool.</strong> Its
+    dominant components — ozone and fine particles — are largely <em>secondary</em> pollutants that
+    form in the atmosphere downwind of their precursors, over hours and many kilometres. The IQA
+    therefore characterizes the broad airshed rather than nearby emissions: it cannot — and was not
+    built to — resolve a local source such as the Décarie corridor. Questions about traffic
+    proximity are better answered by the directly-emitted markers (NO, NO₂, black carbon, ultrafine
+    particles), which is partly why the network deploys those instruments selectively (see the
+    Network page).
+  </p>
+  <p>
+    <em>One caveat for comparison with official summaries:</em> this app aggregates every metric
+    by bucket mean, so a "daily" IQA here is the mean of the hourly index rather than the daily
+    maximum some agencies report. Use the map's Maximum statistic for a worst-case reading. The
+    City began publishing the index in 2007, so the IQA is available from 2007 onward; earlier
+    years show the measured pollutants only.
+  </p>
+</section>
+
+<section>
+  <h2>The map's interpolated surface</h2>
+  <p>
+    The stations are sparse points, so the coloured overlay is an
+    <strong>inverse-distance-weighted (IDW) interpolation</strong>: each pixel blends the
+    station values, weighting nearer stations more heavily. To avoid implying certainty where
+    there are no sensors, the overlay's <strong>opacity fades with distance</strong> from the
+    nearest station and disappears a few kilometres out. A substance measured at only one
+    station (for example benzene) shows that single marker with no surface, since there is
+    nothing to interpolate between.
+  </p>
+</section>
+
+<section>
+  <h2>Notes and limitations</h2>
+  <ul>
+    <li>This is an unofficial visualization; for authoritative figures consult the City's own publications and the open datasets linked above.</li>
+    <li>Coverage is uneven by design — see the Network page — so cross-station comparisons are only meaningful for substances several stations measure.</li>
+    <li>Long-range comparisons should be read with the network's evolution in mind: changing stations, instruments, and siting over 1986–2024 mean trends reflect both real air-quality change and monitoring change.</li>
+  </ul>
+</section>
