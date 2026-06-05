@@ -9,8 +9,17 @@ use crate::data::types::{Interval, IqaDominance, Reading, Station};
 
 /// GET a same-origin JSON file and deserialize it. Mirrors BikeStat's
 /// defensive shape: a non-2xx status is an explicit error rather than a panic.
+///
+/// `cache: no-cache` makes the browser always revalidate via a conditional
+/// request: unchanged files come back as a tiny `304` (no re-download), but a
+/// file changed by a deploy returns fresh bytes. The data files have stable
+/// names and no `Cache-Control`, so without this a heuristically-cached old
+/// copy could be served to a newer build — e.g. the format-changed daily tier,
+/// which the new code then couldn't parse. The server already sends ETags, so
+/// the revalidation is cheap.
 async fn fetch_json<T: for<'de> Deserialize<'de>>(url: &str) -> Result<T, String> {
     let resp = gloo_net::http::Request::get(url)
+        .cache(web_sys::RequestCache::NoCache)
         .send()
         .await
         .map_err(|e| format!("Network error: {e:?}"))?;
