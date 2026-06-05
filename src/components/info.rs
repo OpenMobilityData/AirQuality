@@ -11,6 +11,9 @@ const NETWORK_EN: &str = include_str!("../content/rsqa-en.html");
 const NETWORK_FR: &str = include_str!("../content/rsqa-fr.html");
 const METHODS_EN: &str = include_str!("../content/rsqa-methods-en.html");
 const METHODS_FR: &str = include_str!("../content/rsqa-methods-fr.html");
+// Limits reference is authored in English only for now; both languages render it
+// until a French translation is added.
+const LIMITS_EN: &str = include_str!("../content/air-quality-limits-en.html");
 
 /// Which informational article to render.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,6 +22,8 @@ pub enum InfoKind {
     Network,
     /// This site's data sources and processing methodology.
     Methods,
+    /// Air-quality limits and guidelines (regulatory standards vs. health guidelines).
+    Limits,
 }
 
 #[component]
@@ -29,6 +34,7 @@ pub fn InfoPage(kind: InfoKind) -> impl IntoView {
         (InfoKind::Network, Lang::Fr) => NETWORK_FR,
         (InfoKind::Methods, Lang::En) => METHODS_EN,
         (InfoKind::Methods, Lang::Fr) => METHODS_FR,
+        (InfoKind::Limits, _) => LIMITS_EN,
     };
     view! {
         <div class="info-page">

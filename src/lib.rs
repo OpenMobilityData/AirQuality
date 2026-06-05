@@ -157,7 +157,7 @@ fn App() -> impl IntoView {
     let substance_options = Memo::new(move |_| {
         let subs = active_subs.get();
         match view.get() {
-            View::Map | View::Network | View::Methods => subs,
+            View::Map | View::Network | View::Methods | View::Limits => subs,
             View::Series => match selected_station.get() {
                 Some(sid) => stations
                     .get()
@@ -466,6 +466,10 @@ fn App() -> impl IntoView {
                             on:click=move |_| set_view.set(View::Methods)>
                         {move || lang.get().t().view_methods}
                     </button>
+                    <button class=move || if view.get() == View::Limits { "active" } else { "" }
+                            on:click=move |_| set_view.set(View::Limits)>
+                        {move || lang.get().t().view_limits}
+                    </button>
                 </div>
 
                 <span class="data-status">{data_chip}</span>
@@ -524,6 +528,7 @@ fn App() -> impl IntoView {
                     }.into_any(),
                     View::Network => view! { <InfoPage kind=InfoKind::Network /> }.into_any(),
                     View::Methods => view! { <InfoPage kind=InfoKind::Methods /> }.into_any(),
+                    View::Limits => view! { <InfoPage kind=InfoKind::Limits /> }.into_any(),
                 }}
             </main>
         </div>

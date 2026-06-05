@@ -263,6 +263,40 @@ main {
 /* Anchored footnote targets get a brief highlight when jumped to. */
 .info-content li:target { background: rgba(233,69,96,0.12); border-radius: 3px; }
 
+/* Reference tables (e.g. the Limits page). Dark theme, zebra rows, scrollable
+   on narrow viewports so wide tables don't overflow the article column. */
+.info-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 1.1rem;
+    font-size: 0.86rem;
+    line-height: 1.45;
+    display: block;
+    overflow-x: auto;
+}
+.info-content caption {
+    caption-side: top;
+    text-align: left;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-style: italic;
+    margin-bottom: 0.5rem;
+}
+.info-content th, .info-content td {
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+    vertical-align: top;
+}
+.info-content thead th {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.info-content tbody tr:nth-child(even) { background: rgba(255,255,255,0.025); }
+.info-content tbody td:first-child { color: #fff; }
+
 /* ── Chart ── */
 .chart-container {
     flex: 1;

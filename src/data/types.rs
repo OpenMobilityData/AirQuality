@@ -148,11 +148,13 @@ pub enum View {
     Network,
     /// Data sources and processing methodology.
     Methods,
+    /// Air-quality limits and guidelines reference.
+    Limits,
 }
 
 impl View {
     /// True for the read-only article views, which hide the filter sidebar.
     pub fn is_info(self) -> bool {
-        matches!(self, View::Network | View::Methods)
+        matches!(self, View::Network | View::Methods | View::Limits)
     }
 }

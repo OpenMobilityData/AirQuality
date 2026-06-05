@@ -1,0 +1,450 @@
+
+  <header>
+    <h1>Air Quality Limits and Guidelines</h1>
+    <p>
+      This page explains the limits and guidelines against which the air quality readings in this app
+      can be compared. The most important thing to understand before reading any number is that there
+      are two different kinds of threshold, and they are not the same: <strong>regulatory standards</strong>,
+      which a jurisdiction commits to meeting, and <strong>health-based guidelines</strong>, which describe
+      the levels below which health effects are minimized. The two can differ by a factor of two or more,
+      so a reading can be "within the standard" and still well above the health-based guideline.
+    </p>
+  </header>
+
+  <section>
+    <h2>How to read a limit</h2>
+    <p>A threshold is meaningless without four pieces of context, all of which are easy to miss.</p>
+    <ul>
+      <li>
+        <strong>Averaging period.</strong> The same pollutant has different limits for different exposure
+        windows — an annual mean, a 24-hour mean, an 8-hour mean, a 1-hour peak. A reading only makes sense
+        compared against the limit for the same averaging period.
+      </li>
+      <li>
+        <strong>Statistical form.</strong> Many regulatory standards are not a simple average. The Canadian
+        standards, for example, are typically assessed as a three-year average of a specific yearly statistic
+        (the annual mean, or the 98th percentile of daily values). A single year above the number is not
+        automatically an exceedance, and a low single year can mask a higher three-year metric.
+      </li>
+      <li>
+        <strong>Units.</strong> Gases are reported in this app in parts per billion (ppb); some guidelines
+        are expressed in micrograms per cubic metre (µg/m³). Converting between them depends on temperature
+        and pressure. At 25&nbsp;°C, approximate conversions are: NO₂ 1&nbsp;ppb ≈ 1.88&nbsp;µg/m³,
+        O₃ 1&nbsp;ppb ≈ 1.96&nbsp;µg/m³, SO₂ 1&nbsp;ppb ≈ 2.62&nbsp;µg/m³, and CO 1&nbsp;ppm ≈ 1.145&nbsp;mg/m³.
+        Particulate matter (PM2.5, PM10) is already a mass concentration (µg/m³) and needs no conversion.
+      </li>
+      <li>
+        <strong>How achievement is judged.</strong> Regulatory achievement is assessed for an air zone using
+        designated reporting stations, and there are mechanisms to set aside data influenced by exceptional
+        events such as wildfire smoke. A near-road station records a localized maximum and is not necessarily
+        the station used to determine whether a region meets a standard.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Canadian Ambient Air Quality Standards (CAAQS)</h2>
+    <p>
+      The CAAQS are the regulatory benchmarks that apply in Canada, set through the Canadian Council of
+      Ministers of the Environment (CCME) and implemented by the provinces. They are explicitly
+      <em>not</em> a "pollute-up-to" level: the CCME and Health Canada state that population health effects
+      occur at concentrations below the standards <sup><a href="#ref1">[1]</a></sup><sup><a href="#ref2">[2]</a></sup>.
+      Some pollutants have staged values that tighten over time; the table below lists the value currently
+      in effect.
+    </p>
+    <table>
+      <caption>CAAQS currently in effect (as of early 2026)</caption>
+      <thead>
+        <tr>
+          <th scope="col">Pollutant</th>
+          <th scope="col">Averaging period</th>
+          <th scope="col">Standard</th>
+          <th scope="col">Statistical form (approximate)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Fine particulate matter (PM2.5)</td>
+          <td>Annual</td>
+          <td>8.8 µg/m³ (2020)</td>
+          <td>3-year average of annual means</td>
+        </tr>
+        <tr>
+          <td>Fine particulate matter (PM2.5)</td>
+          <td>24-hour</td>
+          <td>27 µg/m³ (2020)</td>
+          <td>3-year average of the annual 98th percentile of daily values</td>
+        </tr>
+        <tr>
+          <td>Ozone (O₃)</td>
+          <td>8-hour</td>
+          <td>62 ppb (2020)</td>
+          <td>3-year average of the annual 4th-highest daily maximum 8-hour value</td>
+        </tr>
+        <tr>
+          <td>Nitrogen dioxide (NO₂)</td>
+          <td>Annual</td>
+          <td>12.0 ppb (2025)</td>
+          <td>3-year average of annual means</td>
+        </tr>
+        <tr>
+          <td>Nitrogen dioxide (NO₂)</td>
+          <td>1-hour</td>
+          <td>42 ppb (2025)</td>
+          <td>3-year average of the annual 98th percentile of daily maximum 1-hour values</td>
+        </tr>
+        <tr>
+          <td>Sulphur dioxide (SO₂)</td>
+          <td>Annual</td>
+          <td>4.0 ppb (2025)</td>
+          <td>Annual mean</td>
+        </tr>
+        <tr>
+          <td>Sulphur dioxide (SO₂)</td>
+          <td>1-hour</td>
+          <td>65 ppb (2025)</td>
+          <td>3-year average of the annual 99th percentile of daily maximum 1-hour values</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      The year in parentheses is the implementation tier; earlier tiers were less stringent (for example,
+      the 2020 annual NO₂ standard was 17.0&nbsp;ppb before tightening to 12.0&nbsp;ppb in 2025). A more
+      stringent PM2.5 standard for 2030 was endorsed by the CCME in July 2025 and will replace the 2020
+      value; confirm the exact figure with the CCME before relying on it
+      <sup><a href="#ref3">[3]</a></sup>. The precise metric definitions are specified by the CCME and
+      should be treated as authoritative over the simplified forms above.
+    </p>
+  </section>
+
+  <section>
+    <h2>World Health Organization (WHO) air quality guidelines, 2021</h2>
+    <p>
+      The WHO guidelines are health-based and advisory, not regulatory. They were substantially tightened
+      in 2021 to reflect evidence that harm occurs at lower concentrations than previously recognized, and
+      they are considerably stricter than most regulatory standards <sup><a href="#ref4">[4]</a></sup>. The
+      WHO is explicit that there is no identified safe threshold for fine particulate matter. The guidelines
+      also add good-practice statements for pollutants with no numeric guideline, including black carbon and
+      ultrafine particles.
+    </p>
+    <table>
+      <caption>WHO 2021 global air quality guideline levels</caption>
+      <thead>
+        <tr>
+          <th scope="col">Pollutant</th>
+          <th scope="col">Averaging period</th>
+          <th scope="col">Guideline level</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Fine particulate matter (PM2.5)</td><td>Annual</td><td>5 µg/m³</td></tr>
+        <tr><td>Fine particulate matter (PM2.5)</td><td>24-hour</td><td>15 µg/m³</td></tr>
+        <tr><td>Coarse particulate matter (PM10)</td><td>Annual</td><td>15 µg/m³</td></tr>
+        <tr><td>Coarse particulate matter (PM10)</td><td>24-hour</td><td>45 µg/m³</td></tr>
+        <tr><td>Nitrogen dioxide (NO₂)</td><td>Annual</td><td>10 µg/m³</td></tr>
+        <tr><td>Nitrogen dioxide (NO₂)</td><td>24-hour</td><td>25 µg/m³</td></tr>
+        <tr><td>Ozone (O₃)</td><td>Peak season</td><td>60 µg/m³</td></tr>
+        <tr><td>Ozone (O₃)</td><td>8-hour</td><td>100 µg/m³</td></tr>
+        <tr><td>Sulphur dioxide (SO₂)</td><td>24-hour</td><td>40 µg/m³</td></tr>
+        <tr><td>Carbon monoxide (CO)</td><td>24-hour</td><td>4 mg/m³</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>United States standards (NAAQS), for comparison</h2>
+    <p>
+      The US national standards are included only as a familiar point of comparison; they do not apply in
+      Canada. The annual fine-particle standard is currently unsettled: the EPA lowered it from 12.0 to
+      9.0&nbsp;µg/m³ in February 2024, but in late 2025 the agency moved to have that revision vacated,
+      which would restore the 12.0&nbsp;µg/m³ level — so as of early 2026 its status is in flux and should
+      be verified <sup><a href="#ref5">[5]</a></sup><sup><a href="#ref6">[6]</a></sup>.
+    </p>
+    <table>
+      <caption>US NAAQS (primary, health-based) — selected pollutants</caption>
+      <thead>
+        <tr>
+          <th scope="col">Pollutant</th>
+          <th scope="col">Averaging period</th>
+          <th scope="col">Level</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Fine particulate matter (PM2.5)</td><td>Annual</td><td>9.0 µg/m³ (2024, under reconsideration)</td></tr>
+        <tr><td>Fine particulate matter (PM2.5)</td><td>24-hour</td><td>35 µg/m³</td></tr>
+        <tr><td>Coarse particulate matter (PM10)</td><td>24-hour</td><td>150 µg/m³</td></tr>
+        <tr><td>Ozone (O₃)</td><td>8-hour</td><td>0.070 ppm (70 ppb)</td></tr>
+        <tr><td>Nitrogen dioxide (NO₂)</td><td>Annual</td><td>53 ppb</td></tr>
+        <tr><td>Nitrogen dioxide (NO₂)</td><td>1-hour</td><td>100 ppb</td></tr>
+        <tr><td>Sulphur dioxide (SO₂)</td><td>1-hour</td><td>75 ppb</td></tr>
+        <tr><td>Carbon monoxide (CO)</td><td>8-hour</td><td>9 ppm</td></tr>
+        <tr><td>Carbon monoxide (CO)</td><td>1-hour</td><td>35 ppm</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Quebec and Montreal: the regulation and the index</h2>
+    <p>
+      In Quebec, ambient air is regulated provincially through the Règlement sur l'assainissement de
+      l'atmosphère (RAA), administered by the environment ministry (MELCCFP), within the national CAAQS
+      framework <sup><a href="#ref7">[7]</a></sup>. On the Island of Montréal, the monitoring network (RSQA)
+      is operated by the city.
+    </p>
+    <p>
+      The Air Quality Index (Indice de la qualité de l'air, IQA) reported by the network is a derived
+      communication index, not itself a limit. For each measured pollutant a sub-index is computed as the
+      concentration divided by a reference value and scaled so that an index of 50 corresponds to that
+      reference; the overall hourly index is the highest of the pollutant sub-indices. The reported bands are
+      <strong>good (0–25)</strong>, <strong>acceptable (26–50)</strong>, and <strong>poor (above 50)</strong>
+      <sup><a href="#ref8">[8]</a></sup>. Because the index takes the maximum across pollutants, it is usually
+      governed by whichever pollutant is highest at the time — frequently ozone — and it does not isolate the
+      contribution of any single source.
+    </p>
+  </section>
+
+  <section>
+    <h2>Interpreting the readings in this app</h2>
+    <p>
+      Two practical points follow from the tables above. First, the gases in this app are in ppb, while the
+      WHO guidelines are in µg/m³, so a conversion is needed to compare them: an annual NO₂ of about 12&nbsp;ppb,
+      for instance, is roughly 22&nbsp;µg/m³, which is just inside the current Canadian standard yet more than
+      twice the WHO guideline of 10&nbsp;µg/m³. Second, a value can be both "within the regulatory standard" and
+      "above the health-based guideline" at the same time, and both statements are true — which is why this page
+      lists both kinds of threshold rather than a single number.
+    </p>
+  </section>
+
+  <section>
+    <h2>How Montréal compares to other large cities</h2>
+    <p>
+      The readings at the Décarie interchange — the busiest and most pollution-exposed point in the local
+      network — are modest by the standards of large cities worldwide. The table below sets the interchange
+      against representative cities in North America, Europe, and Asia, on two pollutants that behave very
+      differently: fine particulate matter (PM2.5) and nitrogen dioxide (NO₂). A population column is included
+      only to give a rough sense of each city's scale. One caveat governs the whole table: most of these
+      figures are city-wide or urban-background values, whereas the Décarie figure is a single near-road
+      station — a local maximum — so the comparison <em>understates</em> how clean Montréal is relative to
+      these cities' own traffic hotspots.
+    </p>
+    <p>
+      A note on the nitrogen-oxide column: it reports NO₂, not raw NO. Nitric oxide (NO) is so short-lived that
+      it is not published as a comparable city-level annual figure — it is meaningful only right at the
+      roadside, as in this app's own RSQA data — so NO₂, the regulated traffic marker, is used instead. Values
+      labelled "bg" are urban background; roadside or kerbside figures are noted separately.
+    </p>
+    <table>
+      <caption>Annual mean PM2.5 and NO₂ (µg/m³) with approximate metropolitan population — representative large cities. WHO health guidelines: PM2.5 5 µg/m³; NO₂ 10 µg/m³.</caption>
+      <thead>
+        <tr>
+          <th scope="col">City</th>
+          <th scope="col">Region</th>
+          <th scope="col">Population (metro, approx.)</th>
+          <th scope="col">PM2.5 (µg/m³)</th>
+          <th scope="col">NO₂ (µg/m³)</th>
+          <th scope="col">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Montréal (city-wide)</td>
+          <td>North America</td>
+          <td>≈4.3 M</td>
+          <td>7.04 (2024)</td>
+          <td>≈14.0 (7.47 ppb)</td>
+          <td>Reference city. Both figures are this app's own RSQA station averages, kept on the same basis as the Décarie below — PM2.5 the 2024 station average (about 1.4× the WHO guideline), NO₂ the 2024 station average (7.47 ppb, converted at 1 ppb ≈ 1.88 µg/m³). Official aggregates differ by method: IQAir reports 8.9 µg/m³ PM2.5 for 2024 <sup><a href="#ref9">[9]</a></sup>.</td>
+        </tr>
+        <tr>
+          <td>— Décarie interchange (near-road)</td>
+          <td>North America</td>
+          <td>—</td>
+          <td>≈8.1 (2024); 9.3 (3-yr)</td>
+          <td>≈22 (≈12 ppb)</td>
+          <td>RSQA station 28 (near-road, this app's own data). Its NO₂ is a local traffic maximum — about 1.6× the Montréal city-wide average above, and ≈ Paris's city-wide background — while its PM2.5 sits only modestly above the city average</td>
+        </tr>
+        <tr>
+          <td>Toronto</td>
+          <td>North America</td>
+          <td>≈6.4 M</td>
+          <td>6.9 (2024)</td>
+          <td>≈15–20 (approx.)</td>
+          <td>PM2.5 from IQAir <sup><a href="#ref10">[10]</a></sup></td>
+        </tr>
+        <tr>
+          <td>Ottawa</td>
+          <td>North America</td>
+          <td>≈1.5 M</td>
+          <td>≈7–8 (recent)</td>
+          <td>≈10–15 (approx.)</td>
+          <td>PM2.5: 7.3 (2019), 8.2 (2021) <sup><a href="#ref24">[24]</a></sup></td>
+        </tr>
+        <tr>
+          <td>Boston</td>
+          <td>North America</td>
+          <td>≈4.9 M</td>
+          <td>≈7–8 (recent)</td>
+          <td>≈15–20 (approx.)</td>
+          <td>PM2.5: 10.1 in 2018, declining since <sup><a href="#ref25">[25]</a></sup></td>
+        </tr>
+        <tr>
+          <td>New York</td>
+          <td>North America</td>
+          <td>≈19.5 M</td>
+          <td>below 10 (recent)</td>
+          <td>≈20–25 (approx.)</td>
+          <td>Among the cleanest world megacities for PM2.5 <sup><a href="#ref11">[11]</a></sup></td>
+        </tr>
+        <tr>
+          <td>Los Angeles</td>
+          <td>North America</td>
+          <td>≈12.9 M</td>
+          <td>≈12–14 (approx.)</td>
+          <td>≈20–30 (approx.)</td>
+          <td>IQAir's most-polluted major U.S. city by PM2.5, 2024 <sup><a href="#ref12">[12]</a></sup></td>
+        </tr>
+        <tr>
+          <td>Paris</td>
+          <td>Europe</td>
+          <td>≈11 M</td>
+          <td>≈10 (2023–24)</td>
+          <td>≈22 bg; 24–44 roadside</td>
+          <td>Background NO₂ ≈ the Décarie; roadside ranges from the Champs-Élysées (24) to the A1 at Saint-Denis (44) <sup><a href="#ref18">[18]</a></sup></td>
+        </tr>
+        <tr>
+          <td>Amsterdam</td>
+          <td>Europe</td>
+          <td>≈1.5 M</td>
+          <td>≈9–11 (recent)</td>
+          <td>≈20 bg (approx.)</td>
+          <td>PM2.5 from IQAir <sup><a href="#ref23">[23]</a></sup></td>
+        </tr>
+        <tr>
+          <td>Copenhagen</td>
+          <td>Europe</td>
+          <td>≈1.4 M</td>
+          <td>≈9 (recent)</td>
+          <td>≈12 bg; ≈38 busiest street</td>
+          <td>Busiest-street NO₂ (H.C. Andersens Boulevard) about 38 <sup><a href="#ref22">[22]</a></sup></td>
+        </tr>
+        <tr>
+          <td>London</td>
+          <td>Europe</td>
+          <td>≈9.5 M</td>
+          <td>≈9 (2024)</td>
+          <td>≈30 bg; ≈37 kerbside</td>
+          <td>Met the 40 µg/m³ NO₂ limit for the first time in 2024; still above the WHO guideline at all sites <sup><a href="#ref13">[13]</a></sup><sup><a href="#ref20">[20]</a></sup><sup><a href="#ref21">[21]</a></sup></td>
+        </tr>
+        <tr>
+          <td>Milan (Po Valley)</td>
+          <td>Europe</td>
+          <td>≈3.2 M</td>
+          <td>≈20 (approx.)</td>
+          <td>≈35–40 (approx.)</td>
+          <td>Among Western Europe's most polluted major cities for particulates, owing to the Po Valley basin <sup><a href="#ref14">[14]</a></sup></td>
+        </tr>
+        <tr>
+          <td>Tokyo</td>
+          <td>Asia</td>
+          <td>≈37 M</td>
+          <td>9 (2024)</td>
+          <td>≈20–30 (approx.)</td>
+          <td>Population is the greater Tokyo area; PM2.5 from IQAir <sup><a href="#ref15">[15]</a></sup></td>
+        </tr>
+        <tr>
+          <td>Beijing</td>
+          <td>Asia</td>
+          <td>≈21.5 M</td>
+          <td>30.5 (2024)</td>
+          <td>≈26 (approx.)</td>
+          <td>Meets China's NO₂ standard (40); NO₂ down about 54% since 2013 <sup><a href="#ref16">[16]</a></sup></td>
+        </tr>
+        <tr>
+          <td>Delhi</td>
+          <td>Asia</td>
+          <td>≈32 M</td>
+          <td>91.8 (2024)</td>
+          <td>≈40–50 (approx.)</td>
+          <td>World's most-polluted capital by PM2.5, 2024 <sup><a href="#ref12">[12]</a></sup></td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      The two pollutants tell different stories, which is the point of showing both. PM2.5 is largely a
+      regional, background pollutant carried in from distant sources and wildfires, so it clusters the clean
+      cities tightly together — Montréal, Toronto, Ottawa, Boston, Paris, Amsterdam, Copenhagen, London, and
+      Tokyo all sit within a few µg/m³ of one another — and the Décarie's PM2.5 (≈8.1) sits only modestly above
+      the Montréal city-wide average (≈7.0). NO₂,
+      by contrast, is produced locally by traffic and is short-lived, so it varies sharply <em>within</em> a
+      city: roadside concentrations commonly run several times the urban background, by a factor reported in
+      Paris of one to six <sup><a href="#ref19">[19]</a></sup>. Montréal's own data show the same pattern: the
+      city-wide 2024 average NO₂ is about 14.0&nbsp;µg/m³ (7.47&nbsp;ppb), against roughly 22 at the
+      Décarie — so the interchange runs about 1.6 times the city background, while the city as a
+      whole does not stand out.
+    </p>
+    <p>
+      And yet even on that traffic-specific marker the Décarie is modest: its near-road NO₂ of roughly
+      22&nbsp;µg/m³ is about the same as Paris's <em>city-wide background</em>, and below the roadside levels
+      of Paris (24–44), London (kerbside ≈37), and the busiest streets of Copenhagen (≈38). The interchange is
+      elevated <em>for Montréal</em>, but it would be an ordinary urban-background reading in Paris and a
+      relatively clean roadside one in London.
+    </p>
+    <p>
+      Two things follow, and they pull in opposite directions. First, this is further reason an
+      intrinsic-hazard air-quality argument is weak: even Montréal's worst near-road point sits just above the
+      city average and well below most large cities, at roughly 1.6× the WHO PM2.5 guideline — against about 6× in
+      Beijing and 18× in Delhi. Second, "clean by world standards" is not the same as "harmless": the levels
+      still exceed the WHO health guidelines, for which there is no identified safe threshold for PM2.5, and
+      the local NO₂ increment at the interchange is real. The honest use of these numbers is as context — they
+      explain why air quality cannot be the headline, and they pre-empt any suggestion that the campaign is
+      overstating a hazard.
+    </p>
+    <p>
+      <strong>Caveats.</strong> The nitrogen-dioxide column is much rougher than the PM2.5 column. NO₂ is
+      strongly site-dependent — urban-background and roadside readings in the same city can differ several-fold
+      — so figures are labelled "bg" (urban background) where known, and values marked "approx." are
+      indicative estimates drawn from mixed national networks and years that should be verified against a
+      primary source before being quoted; the best-sourced entries are the Décarie, Paris, London, and
+      Copenhagen. The Montréal figures — both the city-wide row and the Décarie — are computed from this app's
+      own RSQA data so they sit on a common basis (both 2024 station averages),
+      which is why the Montréal PM2.5 differs from official aggregates such as IQAir's 8.9 µg/m³ for
+      2024. The trade-off is deliberate: the Décarie-versus-Montréal comparison is then internally consistent
+      (same method), while the Montréal-versus-other-cities comparison is method-approximate, since the other
+      cities use their own official or aggregated figures. Population figures are approximate metropolitan or
+      urban-area values and use inconsistent definitions between countries (city proper vs. metropolitan area
+      vs. urban agglomeration); they indicate scale only. PM2.5 figures for North American cities in 2023–2024
+      are inflated by wildfire smoke, so the underlying non-fire baseline is lower than shown.
+    </p>
+  </section>
+
+  <section>
+    <h2>Sources</h2>
+    <ol>
+      <li id="ref1">Canadian Council of Ministers of the Environment (CCME) — Canadian Ambient Air Quality Standards and air quality reporting. <a href="https://ccme.ca/">https://ccme.ca/</a></li>
+      <li id="ref2">Environment and Climate Change Canada — Air quality indicators, with comparisons to the CAAQS. <a href="https://www.canada.ca/en/environment-climate-change/services/environmental-indicators/air-quality.html">https://www.canada.ca/en/environment-climate-change/services/environmental-indicators/air-quality.html</a></li>
+      <li id="ref3">Canada Gazette, Part I (Aug. 9, 2025) — notice referencing the CCME's July 2025 endorsement of more stringent 2030 PM2.5 CAAQS. <a href="https://gazette.gc.ca/rp-pr/p1/2025/2025-08-09/html/notice-avis-eng.html">https://gazette.gc.ca/rp-pr/p1/2025/2025-08-09/html/notice-avis-eng.html</a></li>
+      <li id="ref4">World Health Organization — Ambient (outdoor) air quality and health (summary of the 2021 Global Air Quality Guidelines). <a href="https://www.who.int/news-room/fact-sheets/detail/ambient-(outdoor)-air-quality-and-health">https://www.who.int/news-room/fact-sheets/detail/ambient-(outdoor)-air-quality-and-health</a></li>
+      <li id="ref5">US Environmental Protection Agency — NAAQS Table. <a href="https://www.epa.gov/criteria-air-pollutants/naaqs-table">https://www.epa.gov/criteria-air-pollutants/naaqs-table</a></li>
+      <li id="ref6">US Environmental Protection Agency — National Ambient Air Quality Standards for Particulate Matter (2024 revision and subsequent reconsideration). <a href="https://www.epa.gov/pm-pollution/national-ambient-air-quality-standards-naaqs-pm">https://www.epa.gov/pm-pollution/national-ambient-air-quality-standards-naaqs-pm</a></li>
+      <li id="ref7">MELCCFP (Gouvernement du Québec) — air quality monitoring and the provincial framework. <a href="https://www.environnement.gouv.qc.ca/air/reseau-surveillance/carte.asp">https://www.environnement.gouv.qc.ca/air/reseau-surveillance/carte.asp</a></li>
+      <li id="ref8">Données Montréal — RSQA: air quality index (historical), including the index method and bands. <a href="https://donnees.montreal.ca/dataset/rsqa-iqa-historique">https://donnees.montreal.ca/dataset/rsqa-iqa-historique</a></li>
+      <li id="ref9">IQAir — Montréal 2024 annual PM2.5 (8.9 µg/m³). <a href="https://www.iqair.com/us/newsroom/september-23-2025-montreal-among-top-10-most-polluted-cities-in-the-world">https://www.iqair.com/us/newsroom/september-23-2025-montreal-among-top-10-most-polluted-cities-in-the-world</a></li>
+      <li id="ref10">IQAir — Toronto 2024 annual PM2.5 (6.9 µg/m³). <a href="https://www.iqair.com/ca/newsroom/august-14-2025-toronto-among-top-10-most-polluted-cities-in-the-world">https://www.iqair.com/ca/newsroom/august-14-2025-toronto-among-top-10-most-polluted-cities-in-the-world</a></li>
+      <li id="ref11">"Status and characteristics of ambient PM2.5 pollution in global megacities" — New York, Toronto, and Madrid among the cleanest world megacities (annual mean below 10 µg/m³). <a href="https://air.sjtu.edu.cn/Assets/userfiles/sys_eb538c1c-65ff-4e82-8e6a-a1ef01127fed/files/Status%20and%20characteristics%20of%20ambient%20PM2_5%20pollution%20in%20global%20megacities.pdf">https://air.sjtu.edu.cn/</a></li>
+      <li id="ref12">IQAir — 2024 World Air Quality Report (overview; Delhi 91.8 µg/m³; Los Angeles named the most-polluted major U.S. city). <a href="https://www.iqair.com/world-air-quality-report">https://www.iqair.com/world-air-quality-report</a></li>
+      <li id="ref13">Defra (UK) — Air pollution in the UK 2024: compliance assessment summary (London roadside PM2.5; one central-London roadside site above the 10 µg/m³ long-term target in 2024). <a href="https://www.gov.uk/government/publications/air-pollution-in-the-uk-2024/air-pollution-in-the-uk-2024-compliance-assessment-summary">https://www.gov.uk/government/publications/air-pollution-in-the-uk-2024/air-pollution-in-the-uk-2024-compliance-assessment-summary</a></li>
+      <li id="ref14">European Environment Agency — Europe's air quality status 2024 (the Po Valley among Europe's most polluted areas). <a href="https://www.eea.europa.eu/en/analysis/publications/europes-air-quality-status-2024">https://www.eea.europa.eu/en/analysis/publications/europes-air-quality-status-2024</a></li>
+      <li id="ref15">IQAir — Tokyo 2024 annual PM2.5 (9 µg/m³). <a href="https://www.iqair.com/newsroom/tokyo-among-top-10-most-polluted-cities-in-the-world-08-25-2025">https://www.iqair.com/newsroom/tokyo-among-top-10-most-polluted-cities-in-the-world-08-25-2025</a></li>
+      <li id="ref16">Beijing Municipal Bureau of Ecology and Environment — 2024 Ecological Environment Status Bulletin (PM2.5 30.5 µg/m³). <a href="https://english.beijing.gov.cn/latest/news/202505/t20250512_4087121.html">https://english.beijing.gov.cn/latest/news/202505/t20250512_4087121.html</a></li>
+      <li id="ref17">Greater London Authority — Air Quality in London 2016–2024 (NO₂ above the WHO guideline at all monitored sites with adequate data). <a href="https://www.london.gov.uk/media/105046/download">https://www.london.gov.uk/media/105046/download</a></li>
+      <li id="ref18">Airparif — Bilan 2024 de la qualité de l'air, Métropole du Grand Paris (PM2.5 background ≈7–10 µg/m³; NO₂ background ≈22 µg/m³; roadside NO₂ from ≈24 µg/m³ on the Champs-Élysées to ≈44 µg/m³ on the A1 at Saint-Denis). <a href="https://www.airparif.fr/sites/default/files/document_publication/Bilan_QA_MGP_2024.pdf">https://www.airparif.fr/sites/default/files/document_publication/Bilan_QA_MGP_2024.pdf</a></li>
+      <li id="ref19">Ville de Paris / Airparif — near-traffic NO₂ and particulate levels can run one to six times the surrounding agglomeration background. <a href="https://www.paris.fr/pages/etat-des-lieux-de-la-qualite-de-l-air-a-paris-7101">https://www.paris.fr/pages/etat-des-lieux-de-la-qualite-de-l-air-a-paris-7101</a></li>
+      <li id="ref20">City of London Corporation — Air Quality Annual Status Report 2024 (NO₂ kerbside ≈37 µg/m³; PM2.5 ≈9 µg/m³, 2024). <a href="https://democracy.cityoflondon.gov.uk/documents/s221692/Appendix%201%202024%20ASR%20Monitoring%20Summary.pdf">https://democracy.cityoflondon.gov.uk/documents/s221692/Appendix%201%202024%20ASR%20Monitoring%20Summary.pdf</a></li>
+      <li id="ref21">Health Effects Institute — State of Global Air: nitrogen dioxide (NO₂ as a traffic proxy; London met the NO₂ Air Quality Standard for the first time in 2024). <a href="https://www.stateofglobalair.org/pollution-sources/nitrogen-dioxide">https://www.stateofglobalair.org/pollution-sources/nitrogen-dioxide</a></li>
+      <li id="ref22">IQAir — Copenhagen (busiest-street NO₂, H.C. Andersens Boulevard, ≈38 µg/m³; 2019 annual PM2.5 9.6 µg/m³, declining since). <a href="https://www.iqair.com/us/denmark/capital-region/copenhagen">https://www.iqair.com/us/denmark/capital-region/copenhagen</a></li>
+      <li id="ref23">IQAir — Amsterdam (2019 annual PM2.5 10.7 µg/m³; recent levels similar or lower). <a href="https://www.iqair.com/netherlands/north-holland/amsterdam">https://www.iqair.com/netherlands/north-holland/amsterdam</a></li>
+      <li id="ref24">IQAir — Ottawa annual PM2.5 (7.3 µg/m³ in 2019; 8.2 µg/m³ in 2021). <a href="https://www.iqair.com/ca/canada/ontario/ottawa">https://www.iqair.com/ca/canada/ontario/ottawa</a></li>
+      <li id="ref25">IQAir — Boston annual PM2.5 (10.1 µg/m³ in 2018; recent annual readings near 7 µg/m³). <a href="https://www.iqair.com/us/usa/massachusetts/boston">https://www.iqair.com/us/usa/massachusetts/boston</a></li>
+    </ol>
+    <p><em>Regulatory standards change and are subject to legal and administrative revision; the linked primary sources are authoritative over the values reproduced here. Last reviewed against sources available in early 2026.</em></p>
+  </section>
+
