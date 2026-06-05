@@ -6,13 +6,17 @@
 # AIRQUALITY_DEST.
 #
 # Modes:
-#   ./scripts/deploy.sh             Code-only: build + rsync the app, leaving the
-#                                   data already on the server untouched. Fast —
-#                                   does NOT re-run preprocess or re-send the large
-#                                   data tiers (the hourly series alone is ~250 MB).
+#   ./scripts/deploy.sh             Code + committed daily tier: build + rsync the
+#                                   app AND the committed daily series (the Map and
+#                                   Time-series both read it, so it must track the
+#                                   code). Does NOT re-run preprocess or re-send the
+#                                   git-ignored ~250 MB hourly tier (only the Map's
+#                                   time-of-day filter needs that; deploy it once
+#                                   with --data, then it's stable).
 #   ./scripts/deploy.sh --data      Also regenerate static/data from data-src/ and
-#                                   sync the data (content-compared, so unchanged
-#                                   files aren't re-sent).
+#                                   sync every tier incl. the hourly series
+#                                   (content-compared, so unchanged files aren't
+#                                   re-sent). Use after adding a year or stations.
 #   ./scripts/deploy.sh --download  Fetch/refresh the raw archive first, then --data.
 set -euo pipefail
 
@@ -54,16 +58,18 @@ fi
 trunk build --release
 
 if [ "$mode" = "data" ]; then
-    # Content-based compare (--checksum): preprocess rewrites every file each run,
-    # so mtimes always differ; comparing by checksum means only files whose bytes
-    # actually changed (e.g. a newly added year + map-stats) are transferred.
+    # Content-based compare (--checksum): preprocess (and a git checkout) rewrites
+    # files with fresh mtimes, so comparing by checksum means only files whose bytes
+    # actually changed (e.g. a newly added year) are transferred.
     rsync -av --delete --checksum dist/ "${REMOTE}:${DEST}"
 else
-    # Code-only: don't read or transfer the large data tiers already on the server.
-    # rsync --delete leaves excluded paths on the receiver intact, so the server's
-    # data is preserved while stale code bundles (old hashed wasm/js) are cleaned up.
-    rsync -av --delete \
+    # Code + daily tier: sync everything except the heavy git-ignored hourly series
+    # (~250 MB), which is format-stable and deployed separately via --data. The
+    # daily tier IS synced — the Map/Series read it and it must match the code; it's
+    # small (~27 MB) and --checksum avoids resending bytes that didn't change.
+    # rsync --delete leaves the excluded /data/series/ on the receiver intact while
+    # cleaning stale code bundles (old hashed wasm/js).
+    rsync -av --delete --checksum \
         --exclude='/data/series/' \
-        --exclude='/data/series-daily/' \
         dist/ "${REMOTE}:${DEST}"
 fi
