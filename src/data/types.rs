@@ -26,41 +26,23 @@ pub struct Reading {
     pub value: f64,
 }
 
-/// Precomputed per-station/per-substance summary for the map view — one cell
-/// of `map-stats.json`. Avoids parsing the hourly series just to draw the map.
-#[derive(Debug, Clone, Copy, Deserialize)]
+/// One station/substance's aggregated summary for the map, computed client-side
+/// over the selected date range (and optional hour/day-type filter) from the
+/// daily or hourly tier. `mean` is sample-weighted; `min`/`max` are extremes;
+/// `median` is exact (hourly path) or median-of-daily-means (daily path).
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MapStat {
     pub mean: f64,
     pub median: f64,
     pub min: f64,
     pub max: f64,
-    /// Number of valid hourly samples behind the summary (data-contract field;
-    /// retained for tooltips/QA even though the map doesn't render it yet).
+    /// Number of samples behind the summary (hourly readings, or days on the
+    /// daily path). Retained for tooltips/QA even though the map doesn't render it.
     #[allow(dead_code)]
     pub n: u32,
 }
 
-/// Compact, array-encoded map cell `[mean, median, min, max, n]` — the on-disk
-/// shape of every bucket in `map-stats-detailed.json`. Array encoding keeps the
-/// hour × day-type file small; convert to a `MapStat` for aggregation.
-#[derive(Debug, Clone, Copy, Deserialize)]
-pub struct StatArr(pub f64, pub f64, pub f64, pub f64, pub u32);
-
-impl StatArr {
-    pub fn to_map_stat(self) -> MapStat {
-        MapStat { mean: self.0, median: self.1, min: self.2, max: self.3, n: self.4 }
-    }
-}
-
-/// One station/substance/year's detailed cell: 24 hourly buckets (local Montréal
-/// hour 0..23) for weekday and weekend; an empty hour×day-type bucket is `None`.
-#[derive(Debug, Clone, Deserialize)]
-pub struct DayBuckets {
-    pub wd: Vec<Option<StatArr>>,
-    pub we: Vec<Option<StatArr>>,
-}
-
-/// Day-type filter for the map: which days feed the time-of-day aggregation.
+/// Day-type filter for the map: which days feed the aggregation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DayType {
     All,

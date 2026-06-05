@@ -14,7 +14,7 @@ use components::chart::{Chart, Series};
 use components::controls::Sidebar;
 use components::info::{InfoKind, InfoPage};
 use components::map::RegionMap;
-use data::loader::{self, DailySeries, DetailedMapStats, IqaDominanceMap, MapStats, Meta, SeriesFile};
+use data::loader::{self, DailySeries, IqaDominanceMap, Meta, SeriesFile};
 use data::pollutants;
 use data::types::{DayType, Interval, Profile, Stat, Station, View};
 use i18n::Lang;
@@ -54,12 +54,7 @@ fn App() -> impl IntoView {
 
     // ── Core data ──
     let (stations, set_stations) = signal::<Vec<Station>>(vec![]);
-    let (map_stats, set_map_stats) = signal::<MapStats>(BTreeMap::new());
     let (iqa_dominance, set_iqa_dominance) = signal::<IqaDominanceMap>(BTreeMap::new());
-    // Detailed (hour × day-type) map stats — large, so loaded lazily the first
-    // time a time-of-day or day-type filter is narrowed (see the effect below).
-    let (map_detailed, set_map_detailed) = signal::<Option<DetailedMapStats>>(None);
-    let (detailed_loading, set_detailed_loading) = signal(false);
     let (meta, set_meta) = signal::<Option<Meta>>(None);
     let (active_subs, set_active_subs) = signal::<Vec<String>>(vec![]);
     let (years, set_years) = signal::<Vec<i32>>(vec![]);
@@ -73,10 +68,11 @@ fn App() -> impl IntoView {
     let (view, set_view) = signal(View::Map);
     let (selected_substance, set_selected_substance) = signal(String::from("NO"));
     let (stat, set_stat) = signal(Stat::Mean);
-    // Map summary range: an inclusive [from, to] window of years. Defaults to
-    // the whole record (set from meta), so the map opens on the full overview.
-    let (year_from, set_year_from) = signal(1986);
-    let (year_to, set_year_to) = signal(2024);
+    // Map averaging window: an arbitrary [from, to] date range, kept separate from
+    // the Series range so each view keeps its own default (the Map opens on the
+    // latest year, set from meta; the Series on the whole record).
+    let (map_date_from, set_map_date_from) = signal(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
+    let (map_date_to, set_map_date_to) = signal(NaiveDate::from_ymd_opt(2024, 12, 31).unwrap());
     // Map time-of-day filter: an inclusive local-hour window; [0, 23] = whole day.
     let (hour_from, set_hour_from) = signal(0u8);
     let (hour_to, set_hour_to) = signal(23u8);
@@ -107,12 +103,6 @@ fn App() -> impl IntoView {
         }
     });
     spawn_local(async move {
-        match loader::fetch_map_stats().await {
-            Ok(ms) => set_map_stats.set(ms),
-            Err(e) => web_sys::console::error_1(&format!("map-stats: {e}").into()),
-        }
-    });
-    spawn_local(async move {
         set_iqa_dominance.set(loader::fetch_iqa_dominance().await);
     });
     spawn_local(async move {
@@ -122,41 +112,25 @@ fn App() -> impl IntoView {
                     NaiveDate::from_ymd_opt(m.min_year, 1, 1),
                     NaiveDate::from_ymd_opt(m.max_year, 12, 31),
                 ) {
+                    // Series opens on the whole record …
                     set_date_from.set(s);
                     set_date_to.set(e);
                 }
-                // Map defaults to the latest year (a single-year snapshot) rather
-                // than the whole record — the most common entry point.
-                set_year_from.set(m.max_year);
-                set_year_to.set(m.max_year);
+                // … while the Map defaults to the latest year (a single-year
+                // snapshot) — the most common entry point.
+                if let (Some(s), Some(e)) = (
+                    NaiveDate::from_ymd_opt(m.max_year, 1, 1),
+                    NaiveDate::from_ymd_opt(m.max_year, 12, 31),
+                ) {
+                    set_map_date_from.set(s);
+                    set_map_date_to.set(e);
+                }
                 set_years.set(m.years.clone());
                 set_active_subs.set(m.substances.clone());
                 set_meta.set(Some(m));
             }
             Err(e) => web_sys::console::error_1(&format!("meta: {e}").into()),
         }
-    });
-
-    // ── Lazily load the detailed map stats on first use of a Map filter ──
-    // The big hour × day-type file is only needed once the user narrows the
-    // time-of-day window or day type; until then the slim map-stats suffice.
-    Effect::new(move |_| {
-        let filtered =
-            hour_from.get() != 0 || hour_to.get() != 23 || day_type.get() != DayType::All;
-        if !filtered
-            || detailed_loading.get_untracked()
-            || map_detailed.with_untracked(|o| o.is_some())
-        {
-            return;
-        }
-        set_detailed_loading.set(true);
-        spawn_local(async move {
-            match loader::fetch_map_stats_detailed().await {
-                Ok(d) => set_map_detailed.set(Some(d)),
-                Err(e) => web_sys::console::error_1(&format!("map-stats-detailed: {e}").into()),
-            }
-            set_detailed_loading.set(false);
-        });
     });
 
     // ── Date presets (depend on the loaded span + language) ──
@@ -266,6 +240,70 @@ fn App() -> impl IntoView {
                     Err(e) => web_sys::console::error_1(&format!("hourly {sid}-{y}: {e}").into()),
                 }
             });
+        }
+    });
+
+    // ── Map: fetch the daily tier for every station when the Map view is open ──
+    // The map draws all stations at once, so it needs every station's daily file.
+    // Shared with the Series cache, so a station already viewed there is warm.
+    Effect::new(move |_| {
+        if view.get() != View::Map {
+            return;
+        }
+        let cached = daily_cache.get_untracked();
+        for s in stations.get() {
+            let sid = s.id;
+            if cached.contains_key(&sid) {
+                continue;
+            }
+            spawn_local(async move {
+                match loader::fetch_daily_series(sid).await {
+                    Ok(d) => set_daily_cache.update(|c| {
+                        c.insert(sid, d);
+                    }),
+                    Err(e) => web_sys::console::error_1(&format!("daily {sid}: {e}").into()),
+                }
+            });
+        }
+    });
+
+    // Years spanning the map's date range, bounded like the Series hourly load so
+    // a wide hour-filtered range doesn't pull dozens of per-station-year files.
+    let map_hourly_years = move || -> Vec<i32> {
+        let (lo, hi) = (map_date_from.get().year(), map_date_to.get().year());
+        let avail = years.get();
+        let mut ys: Vec<i32> = (lo..=hi).filter(|y| avail.contains(y)).collect();
+        if ys.len() > MAX_HOURLY_YEARS {
+            ys = ys.split_off(ys.len() - MAX_HOURLY_YEARS); // keep newest
+        }
+        ys
+    };
+
+    // ── Map: fetch the hourly tier when a time-of-day window is active ──
+    // Hour-of-day filtering can't come from the daily tier, so load every
+    // station's hourly files for the (bounded) years spanning the map range.
+    Effect::new(move |_| {
+        let hour_filtered = hour_from.get() != 0 || hour_to.get() != 23;
+        if view.get() != View::Map || !hour_filtered {
+            return;
+        }
+        let cached = hourly_cache.get_untracked();
+        let yrs = map_hourly_years();
+        for s in stations.get() {
+            let sid = s.id;
+            for &y in &yrs {
+                if cached.contains_key(&(sid, y)) {
+                    continue;
+                }
+                spawn_local(async move {
+                    match loader::fetch_series(sid, y).await {
+                        Ok(sf) => set_hourly_cache.update(|c| {
+                            c.insert((sid, y), sf);
+                        }),
+                        Err(e) => web_sys::console::error_1(&format!("hourly {sid}-{y}: {e}").into()),
+                    }
+                });
+            }
         }
     });
 
@@ -435,22 +473,23 @@ fn App() -> impl IntoView {
     // ── Callbacks ──
     let on_substance = Callback::new(move |s: String| set_selected_substance.set(s));
     let on_stat = Callback::new(move |s: Stat| set_stat.set(s));
-    let on_year_from = Callback::new(move |y: i32| {
-        set_year_from.set(y);
-        if year_to.get_untracked() < y {
-            set_year_to.set(y);
+    // Map date range: keep from ≤ to by clamping the other end, mirroring the
+    // hour/year-range callbacks.
+    let on_map_date_from = Callback::new(move |d: NaiveDate| {
+        set_map_date_from.set(d);
+        if map_date_to.get_untracked() < d {
+            set_map_date_to.set(d);
         }
     });
-    let on_year_to = Callback::new(move |y: i32| {
-        set_year_to.set(y);
-        if year_from.get_untracked() > y {
-            set_year_from.set(y);
+    let on_map_date_to = Callback::new(move |d: NaiveDate| {
+        set_map_date_to.set(d);
+        if map_date_from.get_untracked() > d {
+            set_map_date_from.set(d);
         }
     });
-    // Quick-range presets set both bounds at once (e.g. "Latest" → a single year).
-    let on_year_range = Callback::new(move |(f, t): (i32, i32)| {
-        set_year_from.set(f);
-        set_year_to.set(t);
+    let on_map_date_preset = Callback::new(move |(f, t): (NaiveDate, NaiveDate)| {
+        set_map_date_from.set(f);
+        set_map_date_to.set(t);
     });
     // Time-of-day window: keep from ≤ to (no overnight wrap), clamping the other
     // end like the year-range callbacks do.
@@ -537,12 +576,11 @@ fn App() -> impl IntoView {
                 on_substance=on_substance
                 stat=stat
                 on_stat=on_stat
-                years=years
-                year_from=year_from
-                year_to=year_to
-                on_year_from=on_year_from
-                on_year_to=on_year_to
-                on_year_range=on_year_range
+                map_date_from=map_date_from
+                map_date_to=map_date_to
+                on_map_date_from=on_map_date_from
+                on_map_date_to=on_map_date_to
+                on_map_date_preset=on_map_date_preset
                 hour_from=hour_from
                 hour_to=hour_to
                 on_hour_from=on_hour_from
@@ -570,16 +608,16 @@ fn App() -> impl IntoView {
                     View::Map => view! {
                         <RegionMap
                             stations=stations
-                            map_stats=map_stats
+                            daily_cache=daily_cache
+                            hourly_cache=hourly_cache
                             iqa_dominance=iqa_dominance
-                            year_from=year_from
-                            year_to=year_to
+                            date_from=map_date_from
+                            date_to=map_date_to
                             substance=selected_substance
                             stat=stat
                             hour_from=hour_from
                             hour_to=hour_to
                             day_type=day_type
-                            detailed=map_detailed
                         />
                     }.into_any(),
                     View::Series => view! {

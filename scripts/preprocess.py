@@ -12,12 +12,16 @@ blank line in some years), so parsing is deliberately tolerant — see
 
 Outputs (under ``static/data/``):
   stations.json                     station metadata + years each reported
-  map-stats.json                    {year|"all" -> station -> substance -> {mean,median,min,max,n}}
-  map-stats-detailed.json           {year -> station -> substance -> {wd,we: [[mean,median,min,max,n]|null x24]}}
   iqa-dominance.json                {year -> station -> {peak_pollutant,peak_iqa,shares}}
-  series-daily/station-<id>.json    daily means per substance across all years
+  series-daily/station-<id>.json    per-day [idx,mean,min,max,n] per substance, all years
   series/station-<id>-<year>.json   hourly values per station-year (loaded on demand)
   meta.json                         years / latest / generation stamp / attribution
+
+The Map and Time-series views both read the daily tier; the Map additionally
+loads the hourly tier on demand when a time-of-day filter is active. The old
+precomputed ``map-stats.json`` / ``map-stats-detailed.json`` were retired when
+the Map gained arbitrary date-range averaging (it now aggregates the daily and
+hourly tiers client-side, exactly like the Time-series view).
 
 No third-party dependencies — standard library only.
 
@@ -33,7 +37,6 @@ import glob
 import json
 import os
 import re
-import statistics
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -180,43 +183,6 @@ def year_base_utc(year: int) -> datetime:
     return datetime(year, 1, 1, 0, 0, tzinfo=MONTREAL).astimezone(UTC)
 
 
-def stat_cell(values: list[float]) -> dict:
-    return {
-        "mean": round(statistics.fmean(values), 4),
-        "median": round(statistics.median(values), 4),
-        "min": round(min(values), 4),
-        "max": round(max(values), 4),
-        "n": len(values),
-    }
-
-
-def stat_cell_compact(values: list[float]) -> list:
-    """Compact ``[mean, median, min, max, n]`` cell for the detailed map stats.
-    Same math as ``stat_cell`` but array-encoded to keep the bucketed file small."""
-    return [
-        round(statistics.fmean(values), 4),
-        round(statistics.median(values), 4),
-        round(min(values), 4),
-        round(max(values), 4),
-        len(values),
-    ]
-
-
-# (local hour 0-23, is_weekend) per UTC instant, in Montréal time. Memoized within
-# a year (timestamps repeat across stations/substances) to avoid re-running the
-# tz conversion millions of times; cleared at the top of each year.
-_LOCAL_HW: dict = {}
-
-
-def local_hour_weekend(ts) -> tuple:
-    hw = _LOCAL_HW.get(ts)
-    if hw is None:
-        loc = ts.astimezone(MONTREAL)
-        hw = (loc.hour, loc.weekday() >= 5)
-        _LOCAL_HW[ts] = hw
-    return hw
-
-
 def iqa_bundle_for_year(year: int) -> str | None:
     for path in glob.glob(os.path.join(RAW, "rsqa-indice-qualite-air-*.csv")):
         m = re.search(r"(\d{4})-(\d{4})", os.path.basename(path))
@@ -240,10 +206,11 @@ def main() -> None:
     os.makedirs(os.path.join(OUT, "series-daily"), exist_ok=True)
 
     # Cross-year accumulators (small per entry).
-    daily: dict[tuple, list] = defaultdict(lambda: [0.0, 0])  # (sid,sub,ordinal) -> [sum,count]
-    all_acc: dict[tuple, dict] = {}                            # (sid,sub) -> {sum,min,max,n}
-    map_stats: dict[str, dict] = {}                            # year|"all" -> sid -> sub -> cell
-    detailed_stats: dict[str, dict] = {}                       # year -> sid -> sub -> {wd,we: [cell|null x24]}
+    # (sid,sub,ordinal) -> [sum, count, min, max] — the day's hourly sum/count and
+    # the day's true hourly extremes, so the daily tier can answer Mean/Min/Max
+    # over any date range without the hourly files.
+    daily: dict[tuple, list] = defaultdict(lambda: [0.0, 0, float("inf"), float("-inf")])
+    seen_pairs: set[tuple] = set()                             # (sid,sub) ever measured
     iqa_dom: dict[str, dict] = {}                              # year -> sid -> {...}
     station_years: dict[int, set] = defaultdict(set)
     present_subs: set[str] = set()
@@ -260,14 +227,11 @@ def main() -> None:
         cell = daily[(sid, sub, o)]
         cell[0] += val
         cell[1] += 1
-        a = all_acc.get((sid, sub))
-        if a is None:
-            all_acc[(sid, sub)] = {"sum": val, "min": val, "max": val, "n": 1}
-        else:
-            a["sum"] += val
-            a["min"] = min(a["min"], val)
-            a["max"] = max(a["max"], val)
-            a["n"] += 1
+        if val < cell[2]:
+            cell[2] = val
+        if val > cell[3]:
+            cell[3] = val
+        seen_pairs.add((sid, sub))
         present_subs.add(sub)
         station_years[sid].add(ts_year_local(ts))
         if min_ord is None or o < min_ord:
@@ -368,27 +332,12 @@ def main() -> None:
                     }
                 iqa_dom[str(year)] = ydom
 
-        # ── per-year map-stats + hourly station-year files ──
+        # ── hourly station-year files (loaded on demand by both views) ──
         ybase = year_base_utc(year)
         per_station_subs: dict[int, dict] = defaultdict(dict)
-        ymap = map_stats.setdefault(str(year), {})
-        ydet = detailed_stats.setdefault(str(year), {})
-        _LOCAL_HW.clear()
         for (sid, sub), vals in buf.items():
             if sid not in coords:
                 continue  # only emit data for mappable (coordinate-having) stations
-            ymap.setdefault(str(sid), {})[sub] = stat_cell([v for _, v in vals])
-            # Hour-of-day × weekday/weekend buckets in local Montréal time, so the
-            # map can filter by time-of-day range and day type. Empty buckets → null.
-            wd = [[] for _ in range(24)]
-            we = [[] for _ in range(24)]
-            for ts, v in vals:
-                h, weekend = local_hour_weekend(ts)
-                (we if weekend else wd)[h].append(v)
-            ydet.setdefault(str(sid), {})[sub] = {
-                "wd": [stat_cell_compact(b) if b else None for b in wd],
-                "we": [stat_cell_compact(b) if b else None for b in we],
-            }
             pairs = sorted(
                 (int((ts - ybase).total_seconds() // 3600), round(v, 4)) for ts, v in vals
             )
@@ -404,45 +353,29 @@ def main() -> None:
             with open(os.path.join(OUT, "series", f"station-{sid}-{year}.json"), "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
         del buf
-        print(f"  {year}: stations {sorted(s for s in ymap.keys())}")
+        print(f"  {year}: stations {sorted(str(s) for s in per_station_subs)}")
 
-    # ── "all"-years map-stats (mean/min/max exact; median over daily means) ──
     base_ord = min_ord
-    daily_means: dict[tuple, list] = defaultdict(list)  # (sid,sub) -> [(ordinal, mean)]
-    for (sid, sub, o), (s, c) in daily.items():
-        daily_means[(sid, sub)].append((o, s / c))
-    allmap: dict[str, dict] = {}
-    for (sid, sub), a in all_acc.items():
-        if sid not in coords:
-            continue
-        dm = [m for _, m in daily_means[(sid, sub)]]
-        allmap.setdefault(str(sid), {})[sub] = {
-            "mean": round(a["sum"] / a["n"], 4),
-            "median": round(statistics.median(dm), 4),
-            "min": round(a["min"], 4),
-            "max": round(a["max"], 4),
-            "n": a["n"],
-        }
-    map_stats["all"] = allmap
 
-    with open(os.path.join(OUT, "map-stats.json"), "w", encoding="utf-8") as f:
-        json.dump(map_stats, f, ensure_ascii=False, separators=(",", ":"))
-    # Detailed (hour × day-type) stats — numeric years only; the map iterates years
-    # for any active filter, so no "all" fast-path layer is needed here.
-    with open(os.path.join(OUT, "map-stats-detailed.json"), "w", encoding="utf-8") as f:
-        json.dump(detailed_stats, f, ensure_ascii=False, separators=(",", ":"))
     with open(os.path.join(OUT, "iqa-dominance.json"), "w", encoding="utf-8") as f:
         json.dump(iqa_dom, f, ensure_ascii=False, separators=(",", ":"))
 
     # ── daily series per station (across all years) ──
+    # Each cell is [day_index, mean, min, max, n]: the day's hourly mean and true
+    # hourly extremes, plus the sample count so a date-range aggregation can be
+    # sample-weighted. Drives both the Time-series view (uses the mean) and the
+    # Map's default (full-day) path.
     base_date = date.fromordinal(base_ord)
     by_station: dict[int, dict] = defaultdict(dict)
-    for (sid, sub), pts in daily_means.items():
-        pts.sort()
-        by_station[sid][sub] = [[o - base_ord, round(m, 4)] for o, m in pts]
+    for (sid, sub, o), (s, c, lo, hi) in daily.items():
+        by_station[sid].setdefault(sub, []).append(
+            [o - base_ord, round(s / c, 4), round(lo, 4), round(hi, 4), c]
+        )
     for sid, subs in by_station.items():
         if sid not in coords:
             continue
+        for cells in subs.values():
+            cells.sort()
         payload = {
             "id": sid, "start_date": base_date.isoformat(),
             "step_days": 1, "substances": subs,
@@ -462,7 +395,7 @@ def main() -> None:
             continue
         # substances ever measured here, in display order
         subs_here = sorted(
-            {sub for (s, sub) in all_acc if s == sid},
+            {sub for (s, sub) in seen_pairs if s == sid},
             key=lambda x: (active_subs.index(x) if x in active_subs else 999),
         )
         stations_out.append({

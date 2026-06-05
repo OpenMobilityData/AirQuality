@@ -20,12 +20,13 @@ pub fn Sidebar(
     stat: ReadSignal<Stat>,
     on_stat: Callback<Stat>,
 
-    years: ReadSignal<Vec<i32>>,
-    year_from: ReadSignal<i32>,
-    year_to: ReadSignal<i32>,
-    on_year_from: Callback<i32>,
-    on_year_to: Callback<i32>,
-    on_year_range: Callback<(i32, i32)>,
+    /// Map averaging window: an arbitrary date range (own signals, separate from
+    /// the Series date range so each view keeps its own default).
+    map_date_from: ReadSignal<NaiveDate>,
+    map_date_to: ReadSignal<NaiveDate>,
+    on_map_date_from: Callback<NaiveDate>,
+    on_map_date_to: Callback<NaiveDate>,
+    on_map_date_preset: Callback<(NaiveDate, NaiveDate)>,
 
     /// Map time-of-day window (inclusive local hours 0..23) and day-type filter.
     hour_from: ReadSignal<u8>,
@@ -75,71 +76,41 @@ pub fn Sidebar(
 
     view! {
         <aside>
-            // ── Map view: Year range + Substance + Statistic ──
+            // ── Map view: Date range + Substance + Statistic + Time filters ──
             <Show when=move || view.get() == View::Map>
                 <div class="control-group">
-                    <label class="section-label">{move || lang.get().t().year_range}</label>
-                    // Quick ranges so common picks (newest year, full record) are one click,
-                    // avoiding a scroll through 39 years in the From dropdown.
+                    <label class="section-label">{move || lang.get().t().date_range}</label>
+                    // Same quick presets as the Series view (All / Last 10y / 5y /
+                    // year / 3 months); no interval-based disabling here.
                     <div class="btn-group">
                         {move || {
-                            let l = lang.get();
-                            let ys = years.get();
-                            let (mn, mx) = match (ys.iter().min(), ys.iter().max()) {
-                                (Some(&a), Some(&b)) => (a, b),
-                                _ => return ().into_any(),
-                            };
-                            let (f, t) = (year_from.get(), year_to.get());
-                            // (label, from, to)
-                            let presets = [
-                                (l.t().all_years.to_string(), mn, mx),
-                                (l.t().last_10_years.to_string(), (mx - 9).max(mn), mx),
-                                (l.t().last_5_years.to_string(), (mx - 4).max(mn), mx),
-                                (format!("{} ({})", l.t().latest_year, mx), mx, mx),
-                            ];
-                            presets.into_iter().map(|(label, pf, pt)| {
-                                let active = f == pf && t == pt;
+                            date_presets.get().into_iter().map(|(label, from, to)| {
                                 view! {
-                                    <button class=if active { "active" } else { "" }
-                                            on:click=move |_| on_year_range.run((pf, pt))>
+                                    <button on:click=move |_| on_map_date_preset.run((from, to))>
                                         {label}
                                     </button>
                                 }
-                            }).collect_view().into_any()
+                            }).collect_view()
                         }}
                     </div>
-                    <div class="year-range">
-                        <select class="substance-select"
-                                on:change=move |e| {
-                                    if let Ok(y) = event_target_value(&e).parse::<i32>() {
-                                        on_year_from.run(y);
-                                    }
-                                }>
-                            {move || {
-                                let sel = year_from.get();
-                                let mut ys = years.get();
-                                ys.sort_unstable_by(|a, b| b.cmp(a));
-                                ys.into_iter().map(|y| {
-                                    view! { <option value=y.to_string() selected=y == sel>{y.to_string()}</option> }
-                                }).collect_view()
-                            }}
-                        </select>
-                        <span class="year-range-sep">"→"</span>
-                        <select class="substance-select"
-                                on:change=move |e| {
-                                    if let Ok(y) = event_target_value(&e).parse::<i32>() {
-                                        on_year_to.run(y);
-                                    }
-                                }>
-                            {move || {
-                                let sel = year_to.get();
-                                let mut ys = years.get();
-                                ys.sort_unstable_by(|a, b| b.cmp(a));
-                                ys.into_iter().map(|y| {
-                                    view! { <option value=y.to_string() selected=y == sel>{y.to_string()}</option> }
-                                }).collect_view()
-                            }}
-                        </select>
+                </div>
+                <div class="control-group">
+                    <label class="section-label">{move || lang.get().t().custom_range}</label>
+                    <div class="date-range">
+                        <input type="date"
+                               prop:value=move || map_date_from.get().format("%Y-%m-%d").to_string()
+                               on:input=move |e| {
+                                   if let Ok(d) = NaiveDate::parse_from_str(&event_target_value(&e), "%Y-%m-%d") {
+                                       on_map_date_from.run(d);
+                                   }
+                               }/>
+                        <input type="date"
+                               prop:value=move || map_date_to.get().format("%Y-%m-%d").to_string()
+                               on:input=move |e| {
+                                   if let Ok(d) = NaiveDate::parse_from_str(&event_target_value(&e), "%Y-%m-%d") {
+                                       on_map_date_to.run(d);
+                                   }
+                               }/>
                     </div>
                 </div>
                 <div class="control-group">

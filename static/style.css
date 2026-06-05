@@ -498,6 +498,8 @@ main {
     z-index: 5;
 }
 .map-hint { top: 8px; left: 10px; }
+/* Stacked below the hover hint; flagged when the time-of-day filter is active. */
+.map-hint.hour-note { top: 26px; max-width: 60%; color: #f3c969; }
 .map-attribution { bottom: 4px; right: 8px; color: #fff; opacity: 0.75; font-size: 9px; }
 
 /* Colour-bar legend (value → colour key), bottom-left of the map. */

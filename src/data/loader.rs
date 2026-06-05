@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc};
 use serde::Deserialize;
 
-use crate::data::types::{DayBuckets, Interval, IqaDominance, MapStat, Reading, Station};
+use crate::data::types::{Interval, IqaDominance, Reading, Station};
 
 // ── Fetch helpers ──────────────────────────────────────────────────────────
 
@@ -22,25 +22,6 @@ async fn fetch_json<T: for<'de> Deserialize<'de>>(url: &str) -> Result<T, String
 
 pub async fn fetch_stations() -> Result<Vec<Station>, String> {
     fetch_json("data/stations.json").await
-}
-
-/// One year's slice of the map stats: `{ station -> { substance -> MapStat } }`.
-pub type YearStats = BTreeMap<String, BTreeMap<String, MapStat>>;
-/// `map-stats.json` → `{ year|"all" -> YearStats }`.
-pub type MapStats = BTreeMap<String, YearStats>;
-
-pub async fn fetch_map_stats() -> Result<MapStats, String> {
-    fetch_json("data/map-stats.json").await
-}
-
-/// `map-stats-detailed.json` → `{ year -> station -> substance -> DayBuckets }`
-/// (numeric years only — no `"all"` layer; the map aggregates years for any
-/// active hour/day filter). Loaded lazily when a time-of-day or day-type filter
-/// is first narrowed.
-pub type DetailedMapStats = BTreeMap<String, BTreeMap<String, BTreeMap<String, DayBuckets>>>;
-
-pub async fn fetch_map_stats_detailed() -> Result<DetailedMapStats, String> {
-    fetch_json("data/map-stats-detailed.json").await
 }
 
 /// `iqa-dominance.json` → `{ year -> { station -> IqaDominance } }`. Optional
@@ -110,15 +91,21 @@ impl SeriesFile {
     }
 }
 
-/// On-disk shape of `series-daily/station-<id>.json` — one daily mean per
-/// substance spanning all years, sparse `[day_index, value]` from `start_date`.
-/// Drives Day/Week/Month/Year intervals over long ranges without hourly loads.
+/// One day's summary in a daily series: `[day_index, mean, min, max, n]` — the
+/// day's hourly mean, true hourly extremes, and sample count, sparse from
+/// `start_date`. The Time-series view uses only the mean; the Map's default
+/// (full-day) path uses all five to aggregate Mean/Min/Max over any date range.
+pub type DailyCell = (i64, f64, f64, f64, u32);
+
+/// On-disk shape of `series-daily/station-<id>.json` — daily cells per substance
+/// spanning all years. Drives Day/Week/Month/Year intervals (Series view) and the
+/// Map's full-day date-range averaging without touching the hourly tier.
 #[derive(Debug, Clone, Deserialize)]
 pub struct DailySeries {
     #[allow(dead_code)]
     pub id: u32,
     pub start_date: String,
-    pub substances: BTreeMap<String, Vec<(i64, f64)>>,
+    pub substances: BTreeMap<String, Vec<DailyCell>>,
 }
 
 pub async fn fetch_daily_series(station_id: u32) -> Result<DailySeries, String> {
@@ -126,17 +113,24 @@ pub async fn fetch_daily_series(station_id: u32) -> Result<DailySeries, String> 
 }
 
 impl DailySeries {
+    /// `start_date` parsed once; the Map maps each cell's day index off this.
+    pub fn base_date(&self) -> Option<chrono::NaiveDate> {
+        chrono::NaiveDate::parse_from_str(&self.start_date, "%Y-%m-%d").ok()
+    }
+
+    /// Expand the daily means into timestamped readings (Series view). Drops the
+    /// min/max/n; the chart plots the daily mean.
     pub fn readings(&self, substance: &str) -> Vec<Reading> {
-        let base = chrono::NaiveDate::parse_from_str(&self.start_date, "%Y-%m-%d")
-            .ok()
+        let base = self
+            .base_date()
             .and_then(|d| d.and_hms_opt(0, 0, 0))
             .map(|ndt| Utc.from_utc_datetime(&ndt))
             .unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
         match self.substances.get(substance) {
             None => Vec::new(),
-            Some(pairs) => pairs
+            Some(cells) => cells
                 .iter()
-                .map(|(idx, v)| Reading { timestamp: base + Duration::days(*idx), value: *v })
+                .map(|(idx, mean, ..)| Reading { timestamp: base + Duration::days(*idx), value: *mean })
                 .collect(),
         }
     }

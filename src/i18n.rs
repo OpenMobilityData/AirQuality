@@ -107,9 +107,7 @@ pub struct T {
     /// Weekday short names, Monday-first, for the weekly profile's axis.
     pub dow: [&'static str; 7],
     pub year: &'static str,
-    pub year_range: &'static str,
     pub all_years: &'static str,
-    pub latest_year: &'static str,
 
     // Stats
     pub stat_mean: &'static str,
@@ -133,6 +131,9 @@ pub struct T {
     // Map
     pub loading_stations: &'static str,
     pub click_marker: &'static str,
+    /// Shown when a time-of-day filter is active: the map reads the hourly tier
+    /// and bounds very long ranges to the most recent years.
+    pub map_hour_note: &'static str,
     pub no_data_substance: &'static str,
     pub stations_measuring: &'static str,
     pub map_avg: &'static str,
@@ -185,9 +186,7 @@ pub const EN: T = T {
     days_all: "All days",
     dow: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     year: "Year",
-    year_range: "Year range",
     all_years: "All years",
-    latest_year: "Latest Year",
 
     stat_mean: "Mean",
     stat_median: "Median",
@@ -207,6 +206,7 @@ pub const EN: T = T {
 
     loading_stations: "Loading stations…",
     click_marker: "Hover a station for its exact value",
+    map_hour_note: "Time-of-day filter uses hourly data (most recent years for long ranges)",
     no_data_substance: "not measured at this station",
     stations_measuring: "stations measuring",
     map_avg: "Station average",
@@ -257,9 +257,7 @@ pub const FR: T = T {
     days_all: "Tous les jours",
     dow: ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"],
     year: "Année",
-    year_range: "Plage d'années",
     all_years: "Toutes les années",
-    latest_year: "Dernière année",
 
     stat_mean: "Moyenne",
     stat_median: "Médiane",
@@ -279,6 +277,7 @@ pub const FR: T = T {
 
     loading_stations: "Chargement des stations…",
     click_marker: "Survolez une station pour sa valeur exacte",
+    map_hour_note: "Le filtre horaire utilise les données horaires (années récentes pour les longues plages)",
     no_data_substance: "non mesurée à cette station",
     stations_measuring: "stations mesurant",
     map_avg: "Moyenne des stations",

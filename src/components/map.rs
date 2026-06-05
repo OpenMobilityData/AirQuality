@@ -1,13 +1,19 @@
+use chrono::{Datelike, Duration, NaiveDate, Timelike, Weekday};
+use chrono_tz::America::Montreal as MontrealTz;
 use leptos::prelude::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{Clamped, JsCast};
 
 use std::collections::BTreeMap;
 
-use crate::data::loader::{DetailedMapStats, IqaDominanceMap, MapStats, YearStats};
+use crate::data::loader::{DailySeries, IqaDominanceMap, SeriesFile};
 use crate::data::pollutants;
 use crate::data::types::{DayType, IqaDominance, MapStat, Stat, Station};
 use crate::i18n::Lang;
+
+/// The map's per-station aggregated slice: `station id -> substance -> MapStat`,
+/// computed client-side over the selected date range from the daily/hourly tier.
+type MapSlice = BTreeMap<String, BTreeMap<String, MapStat>>;
 
 /// Synthetic substance key for the Air Quality Index (mirrors `IQA_KEY` in the
 /// preprocessor); the dominant-pollutant detail only applies to it.
@@ -175,8 +181,8 @@ fn compute_geom(stations: &[Station], w: f64, h: f64) -> Option<Geom> {
     Some(Geom { zoom, cx_tile, cy_tile, eff_tile, w, h, m_per_px })
 }
 
-/// `(stat value)` for a station/substance within one year's slice, or `None`.
-fn station_value(ys: &YearStats, id: u32, substance: &str, stat: Stat) -> Option<f64> {
+/// `(stat value)` for a station/substance within the aggregated slice, or `None`.
+fn station_value(ys: &MapSlice, id: u32, substance: &str, stat: Stat) -> Option<f64> {
     ys.get(&id.to_string())
         .and_then(|m| m.get(substance))
         .map(|s| stat.value(s))
@@ -194,112 +200,116 @@ fn median_of(mut xs: Vec<f64>) -> f64 {
     }
 }
 
-/// Combine the per-year cells across `[from, to]` into one summary slice.
-/// Mean (sample-weighted), min and max are exact; the median is approximated as
-/// the median of the per-year medians (the full-record `"all"` cell, used for
-/// the default full span, carries an exact daily-based median instead).
-fn aggregate_year_stats(ms: &MapStats, from: i32, to: i32) -> YearStats {
-    let data_years: Vec<i32> = ms.keys().filter_map(|k| k.parse::<i32>().ok()).collect();
-    let full = data_years.iter().min().map_or(false, |&lo| from <= lo)
-        && data_years.iter().max().map_or(false, |&hi| to >= hi);
-    if full {
-        if let Some(all) = ms.get("all") {
-            return all.clone();
-        }
+fn is_weekend(wd: Weekday) -> bool {
+    matches!(wd, Weekday::Sat | Weekday::Sun)
+}
+
+/// Does this day pass the day-type filter?
+fn day_type_ok(day_type: DayType, weekend: bool) -> bool {
+    match day_type {
+        DayType::All => true,
+        DayType::Weekday => !weekend,
+        DayType::Weekend => weekend,
     }
-    // acc[(sid,sub)] = (Σ mean·n, min, max, Σ n, [per-year medians])
-    let mut acc: BTreeMap<(String, String), (f64, f64, f64, u64, Vec<f64>)> = BTreeMap::new();
-    for (yk, ystats) in ms {
-        let Ok(y) = yk.parse::<i32>() else { continue };
-        if y < from || y > to {
-            continue;
-        }
-        for (sid, subs) in ystats {
-            for (sub, c) in subs {
-                let e = acc.entry((sid.clone(), sub.clone())).or_insert((0.0, f64::INFINITY, f64::NEG_INFINITY, 0, Vec::new()));
-                e.0 += c.mean * c.n as f64;
-                e.1 = e.1.min(c.min);
-                e.2 = e.2.max(c.max);
-                e.3 += c.n as u64;
-                e.4.push(c.median);
+}
+
+/// Aggregate the **daily tier** over `[from, to]` (full-day path). For each
+/// station/substance, combine the per-day cells whose date falls in range and
+/// passes the day-type filter: mean is sample-weighted by each day's hourly
+/// count, min/max are the true hourly extremes, and the median is the median of
+/// the daily means (an approximation — exact hourly medians need the hourly tier).
+fn aggregate_daily(
+    daily: &BTreeMap<u32, DailySeries>,
+    from: NaiveDate,
+    to: NaiveDate,
+    day_type: DayType,
+) -> MapSlice {
+    let mut out: MapSlice = BTreeMap::new();
+    for (sid, ds) in daily {
+        let Some(base) = ds.base_date() else { continue };
+        let mut sub_map: BTreeMap<String, MapStat> = BTreeMap::new();
+        for (sub, cells) in &ds.substances {
+            // (Σ mean·n, min, max, Σ n, [daily means])
+            let mut sum_mean_n = 0.0_f64;
+            let mut mn = f64::INFINITY;
+            let mut mx = f64::NEG_INFINITY;
+            let mut n: u64 = 0;
+            let mut means: Vec<f64> = Vec::new();
+            for (idx, mean, cmin, cmax, cn) in cells {
+                let date = base + Duration::days(*idx);
+                if date < from || date > to {
+                    continue;
+                }
+                if !day_type_ok(day_type, is_weekend(date.weekday())) {
+                    continue;
+                }
+                sum_mean_n += mean * *cn as f64;
+                mn = mn.min(*cmin);
+                mx = mx.max(*cmax);
+                n += *cn as u64;
+                means.push(*mean);
             }
+            if n == 0 {
+                continue;
+            }
+            sub_map.insert(
+                sub.clone(),
+                MapStat { mean: sum_mean_n / n as f64, median: median_of(means), min: mn, max: mx, n: n as u32 },
+            );
         }
-    }
-    let mut out: YearStats = BTreeMap::new();
-    for ((sid, sub), (sum_mean_n, mn, mx, n, meds)) in acc {
-        if n == 0 {
-            continue;
+        if !sub_map.is_empty() {
+            out.insert(sid.to_string(), sub_map);
         }
-        out.entry(sid).or_default().insert(
-            sub,
-            MapStat {
-                mean: sum_mean_n / n as f64,
-                median: median_of(meds),
-                min: mn,
-                max: mx,
-                n: n as u32,
-            },
-        );
     }
     out
 }
 
-/// Combine the detailed (hour × day-type) cells into one summary slice for the
-/// active filters: years in `[from, to]`, local hours in `[hour_from, hour_to]`
-/// (inclusive), and the selected day type(s). Same aggregation as
-/// [`aggregate_year_stats`] — mean is sample-weighted, min/max exact, the median
-/// approximated as the median of the per-bucket medians.
-fn aggregate_filtered_stats(
-    d: &DetailedMapStats,
-    from: i32,
-    to: i32,
+/// Aggregate the **hourly tier** (used when a time-of-day window is active).
+/// For each loaded station-year, keep readings whose Montréal-local date is in
+/// `[from, to]`, whose local hour is in `[hour_from, hour_to]` (inclusive), and
+/// that pass the day-type filter; then compute exact mean/median/min/max per
+/// station/substance. Empty until the needed hourly files finish loading.
+fn aggregate_hourly(
+    hourly: &BTreeMap<(u32, i32), SeriesFile>,
+    from: NaiveDate,
+    to: NaiveDate,
     hour_from: u8,
     hour_to: u8,
     day_type: DayType,
-) -> YearStats {
-    let want_wd = day_type != DayType::Weekend;
-    let want_we = day_type != DayType::Weekday;
-    let (h0, len) = (hour_from as usize, (hour_to as usize) - (hour_from as usize) + 1);
-    // acc[(sid,sub)] = (Σ mean·n, min, max, Σ n, [per-bucket medians])
-    let mut acc: BTreeMap<(String, String), (f64, f64, f64, u64, Vec<f64>)> = BTreeMap::new();
-    for (yk, ystats) in d {
-        let Ok(y) = yk.parse::<i32>() else { continue };
-        if y < from || y > to {
-            continue;
-        }
-        for (sid, subs) in ystats {
-            for (sub, b) in subs {
-                let e = acc.entry((sid.clone(), sub.clone())).or_insert((0.0, f64::INFINITY, f64::NEG_INFINITY, 0, Vec::new()));
-                for (want, hours) in [(want_wd, &b.wd), (want_we, &b.we)] {
-                    if !want {
-                        continue;
-                    }
-                    for cell in hours.iter().skip(h0).take(len).flatten() {
-                        let c = cell.to_map_stat();
-                        e.0 += c.mean * c.n as f64;
-                        e.1 = e.1.min(c.min);
-                        e.2 = e.2.max(c.max);
-                        e.3 += c.n as u64;
-                        e.4.push(c.median);
-                    }
+) -> MapSlice {
+    // (sid, sub) -> all matching hourly values, for exact stats.
+    let mut acc: BTreeMap<(u32, String), Vec<f64>> = BTreeMap::new();
+    for ((sid, _year), sf) in hourly {
+        for sub in sf.substances.keys() {
+            for r in sf.readings(sub) {
+                let local = r.timestamp.with_timezone(&MontrealTz);
+                let d = local.date_naive();
+                if d < from || d > to {
+                    continue;
                 }
+                let h = local.hour() as u8;
+                if h < hour_from || h > hour_to {
+                    continue;
+                }
+                if !day_type_ok(day_type, is_weekend(local.weekday())) {
+                    continue;
+                }
+                acc.entry((*sid, sub.clone())).or_default().push(r.value);
             }
         }
     }
-    let mut out: YearStats = BTreeMap::new();
-    for ((sid, sub), (sum_mean_n, mn, mx, n, meds)) in acc {
-        if n == 0 {
+    let mut out: MapSlice = BTreeMap::new();
+    for ((sid, sub), vals) in acc {
+        if vals.is_empty() {
             continue;
         }
-        out.entry(sid).or_default().insert(
+        let n = vals.len() as u32;
+        let sum: f64 = vals.iter().sum();
+        let mn = vals.iter().cloned().fold(f64::INFINITY, f64::min);
+        let mx = vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        out.entry(sid.to_string()).or_default().insert(
             sub,
-            MapStat {
-                mean: sum_mean_n / n as f64,
-                median: median_of(meds),
-                min: mn,
-                max: mx,
-                n: n as u32,
-            },
+            MapStat { mean: sum / n as f64, median: median_of(vals), min: mn, max: mx, n },
         );
     }
     out
@@ -448,12 +458,12 @@ async fn build_map_png_blob(
     w: f64,
     h: f64,
     stations: Vec<Station>,
-    ys: YearStats,
+    ys: MapSlice,
     dom: BTreeMap<String, IqaDominance>,
     substance: String,
     stat: Stat,
     lang: Lang,
-    year_label: String,
+    range_label: String,
 ) -> Result<web_sys::Blob, JsValue> {
     let _ = dom; // dominance is summarized in the on-screen markers; not redrawn here
     let document = web_sys::window()
@@ -552,7 +562,7 @@ async fn build_map_png_blob(
 
     // Colour-bar legend (bottom-left), mirroring the on-screen one.
     let t = lang.t();
-    let title = format!("{} · {} · {}", pollutants::name_of(&substance, lang), stat.label(lang), year_label);
+    let title = format!("{} · {} · {}", pollutants::name_of(&substance, lang), stat.label(lang), range_label);
     let (bx, bw, bh) = (10.0_f64, 210.0_f64, 74.0_f64);
     let by = h - bh - 14.0;
     ctx.set_fill_style_str("rgba(13,27,42,0.85)");
@@ -628,45 +638,54 @@ async fn build_map_png_blob(
 #[component]
 pub fn RegionMap(
     stations: ReadSignal<Vec<Station>>,
-    map_stats: ReadSignal<MapStats>,
+    /// Daily tier (one enriched file per station), shared with the Series view.
+    /// Drives the default full-day date-range averaging.
+    daily_cache: ReadSignal<BTreeMap<u32, DailySeries>>,
+    /// Hourly tier (per station-year), shared with the Series view. Read only
+    /// when a time-of-day window is active, to compute exact sub-day stats.
+    hourly_cache: ReadSignal<BTreeMap<(u32, i32), SeriesFile>>,
     iqa_dominance: ReadSignal<IqaDominanceMap>,
-    /// Inclusive year range [from, to] summarized by the map.
-    year_from: ReadSignal<i32>,
-    year_to: ReadSignal<i32>,
+    /// Inclusive date range [from, to] averaged by the map.
+    date_from: ReadSignal<NaiveDate>,
+    date_to: ReadSignal<NaiveDate>,
     substance: ReadSignal<String>,
     stat: ReadSignal<Stat>,
     /// Inclusive local-hour range [hour_from, hour_to] (0..23) and day-type
-    /// filter. When both are at their defaults (full day, all days) the map uses
-    /// the slim `map_stats`; otherwise it reads the lazily-loaded `detailed` file.
+    /// filter. At the full-day default `[0, 23]` the map aggregates the daily
+    /// tier; any narrowed hour window switches to the hourly tier (empty until
+    /// the needed station-year files finish loading, so the map shows no data
+    /// rather than misleading unfiltered values).
     hour_from: ReadSignal<u8>,
     hour_to: ReadSignal<u8>,
     day_type: ReadSignal<DayType>,
-    detailed: ReadSignal<Option<DetailedMapStats>>,
 ) -> impl IntoView {
     let lang = use_context::<ReadSignal<Lang>>().expect("Lang context not provided");
 
-    // The selected range's aggregated slice of the stats / dominance maps.
-    // Default (full day + all days) → slim stats; any narrowed filter → the
-    // detailed buckets (empty until the detailed file finishes loading, so the
-    // map shows no data rather than misleading unfiltered values).
-    let year_stats = move || -> YearStats {
+    // The date range's aggregated slice. Memoised so switching substance or
+    // statistic (which don't affect it) doesn't re-run the heavy aggregation over
+    // every station's daily/hourly data — only a date/hour/day-type change does.
+    // Full-day window → daily tier; any hour window → hourly tier.
+    let slice = Memo::new(move |_| -> MapSlice {
+        let (from, to) = (date_from.get(), date_to.get());
         let (hf, ht, dt) = (hour_from.get(), hour_to.get(), day_type.get());
-        if hf == 0 && ht == 23 && dt == DayType::All {
-            map_stats.with(|m| aggregate_year_stats(m, year_from.get(), year_to.get()))
+        if hf == 0 && ht == 23 {
+            daily_cache.with(|d| aggregate_daily(d, from, to, dt))
         } else {
-            detailed.with(|opt| match opt {
-                Some(d) => aggregate_filtered_stats(d, year_from.get(), year_to.get(), hf, ht, dt),
-                None => YearStats::new(),
-            })
+            hourly_cache.with(|h| aggregate_hourly(h, from, to, hf, ht, dt))
         }
-    };
+    });
+    let year_stats = move || slice.get();
     let year_dom = move || -> BTreeMap<String, IqaDominance> {
-        aggregate_dominance(&iqa_dominance.get(), year_from.get(), year_to.get())
+        aggregate_dominance(&iqa_dominance.get(), date_from.get().year(), date_to.get().year())
     };
-    // Human-readable year label for the colour-bar / export caption.
+    // Human-readable date-range label for the colour-bar / export caption.
     let year_label = move || -> String {
-        let (f, t) = (year_from.get(), year_to.get());
-        if f == t { f.to_string() } else { format!("{f}–{t}") }
+        let (f, t) = (date_from.get(), date_to.get());
+        if f == t {
+            f.format("%Y-%m-%d").to_string()
+        } else {
+            format!("{} → {}", f.format("%Y-%m-%d"), t.format("%Y-%m-%d"))
+        }
     };
 
     let container_ref = NodeRef::<leptos::html::Div>::new();
@@ -1062,6 +1081,13 @@ pub fn RegionMap(
             }}
 
             <div class="map-hint">{move || lang.get().t().click_marker}</div>
+            // When a time-of-day window is active the map reads the hourly tier;
+            // note this (and the long-range bound) so the values read honestly.
+            {move || {
+                (hour_from.get() != 0 || hour_to.get() != 23).then(|| {
+                    view! { <div class="map-hint hour-note">{lang.get().t().map_hour_note}</div> }
+                })
+            }}
             <div class="map-attribution">"© OpenStreetMap © CARTO · RSQA"</div>
         </div>
     }
