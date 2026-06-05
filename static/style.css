@@ -489,6 +489,15 @@ main {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     margin-top: 0.2rem;
 }
+.colorbar-avg {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-top: 0.4rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+}
 .colorbar-note { font-size: 0.62rem; color: var(--text-muted); margin-top: 0.25rem; }
 .colorbar-note.warn { color: #f0b27a; }
 

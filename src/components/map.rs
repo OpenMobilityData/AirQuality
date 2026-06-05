@@ -416,6 +416,16 @@ async fn build_map_png_blob(
     );
     let span = (vmax - vmin).max(1e-9);
     let n_meas = vals.len();
+    // Unweighted mean of the per-station values — the legend's "Station average".
+    let mean = if n_meas > 0 { vals.iter().sum::<f64>() / n_meas as f64 } else { 0.0 };
+    let avg_note = {
+        let v = crate::components::chart::fmt_val(mean);
+        if unit.is_empty() {
+            format!("{}: {v}", lang.t().map_avg)
+        } else {
+            format!("{}: {v} {unit}", lang.t().map_avg)
+        }
+    };
 
     let cap_h = 34.0_f64;
     let total_h = h + cap_h;
@@ -482,7 +492,7 @@ async fn build_map_png_blob(
     // Colour-bar legend (bottom-left), mirroring the on-screen one.
     let t = lang.t();
     let title = format!("{} · {} · {}", pollutants::name_of(&substance, lang), stat.label(lang), year_label);
-    let (bx, bw, bh) = (10.0_f64, 210.0_f64, 60.0_f64);
+    let (bx, bw, bh) = (10.0_f64, 210.0_f64, 74.0_f64);
     let by = h - bh - 14.0;
     ctx.set_fill_style_str("rgba(13,27,42,0.85)");
     ctx.fill_rect(bx, by, bw, bh);
@@ -510,6 +520,9 @@ async fn build_map_png_blob(
         ctx.set_font("9px Inter, system-ui, sans-serif");
         let _ = ctx.fill_text(&format!("{} · {} · {}", t.iqa_good, t.iqa_acceptable, t.iqa_poor), gx, gy + gh + 11.0);
         let _ = ctx.fill_text(&format!("{} · {} {}", t.iqa_higher_worse, n_meas, t.stations_measuring), gx, gy + gh + 22.0);
+        ctx.set_fill_style_str("#eaeaea");
+        ctx.set_font("11px Inter, system-ui, sans-serif");
+        let _ = ctx.fill_text(&avg_note, gx, gy + gh + 36.0);
     } else {
         // Relative ramp drawn as thin slices.
         let slices = 40;
@@ -531,6 +544,9 @@ async fn build_map_png_blob(
             format!("{unit} · {n_meas} {}", t.stations_measuring)
         };
         let _ = ctx.fill_text(&unit_note, gx, gy + gh + 22.0);
+        ctx.set_fill_style_str("#eaeaea");
+        ctx.set_font("11px Inter, system-ui, sans-serif");
+        let _ = ctx.fill_text(&avg_note, gx, gy + gh + 36.0);
     }
 
     // Caption strip (guarantees the parameters are present even with no data).
@@ -635,8 +651,10 @@ pub fn RegionMap(
         }
     });
 
-    // Value domain across stations for the current (substance, stat).
-    let domain = move || -> Option<(f64, f64, usize)> {
+    // Value domain across stations for the current (substance, stat):
+    // (vmin, vmax, mean, n). The mean is the unweighted average of the
+    // per-station values shown on the map — the legend's "Station average".
+    let domain = move || -> Option<(f64, f64, f64, usize)> {
         let ys = year_stats();
         let sub = substance.get();
         let st = stat.get();
@@ -650,7 +668,8 @@ pub fn RegionMap(
         }
         let vmin = vals.iter().cloned().fold(f64::INFINITY, f64::min);
         let vmax = vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-        Some((vmin, vmax, vals.len()))
+        let mean = vals.iter().sum::<f64>() / vals.len() as f64;
+        Some((vmin, vmax, mean, vals.len()))
     };
 
     // Redraw the heatmap canvas whenever inputs change.
@@ -780,7 +799,7 @@ pub fn RegionMap(
                 };
 
                 let dom = domain();
-                let (vmin, vmax) = dom.map(|(a, b, _)| (a, b)).unwrap_or((0.0, 1.0));
+                let (vmin, vmax) = dom.map(|(a, b, _, _)| (a, b)).unwrap_or((0.0, 1.0));
                 let span = (vmax - vmin).max(1e-9);
 
                 // ── Tiles ──
@@ -896,7 +915,7 @@ pub fn RegionMap(
                 let l = lang.get();
                 let sub = substance.get();
                 let st = stat.get();
-                let Some((vmin, vmax, n)) = domain() else {
+                let Some((vmin, vmax, mean, n)) = domain() else {
                     return ().into_any();
                 };
                 // Title carries all three map parameters: substance · statistic · year(s).
@@ -904,6 +923,16 @@ pub fn RegionMap(
                     "{} · {} · {}",
                     pollutants::name_of(&sub, l), st.label(l), year_label()
                 );
+                // Global (unweighted) average of the per-station values on display.
+                let unit = pollutants::unit_of(&sub);
+                let avg_txt = {
+                    let v = crate::components::chart::fmt_val(mean);
+                    if unit.is_empty() {
+                        format!("{}: {v}", l.t().map_avg)
+                    } else {
+                        format!("{}: {v} {unit}", l.t().map_avg)
+                    }
+                };
 
                 if sub == IQA_KEY {
                     // Absolute acceptability bands: Good / Acceptable / Poor.
@@ -924,13 +953,13 @@ pub fn RegionMap(
                                 <span>{format!("{} 26–50", t.iqa_acceptable)}</span>
                                 <span>{format!("{} 50+", t.iqa_poor)}</span>
                             </div>
+                            <div class="colorbar-avg">{avg_txt}</div>
                             <div class="colorbar-note warn">{t.iqa_higher_worse}</div>
                             <div class="colorbar-note">{format!("{n} {}", t.stations_measuring)}</div>
                         </div>
                     }.into_any();
                 }
 
-                let unit = pollutants::unit_of(&sub);
                 let mid = (vmin + vmax) / 2.0;
                 view! {
                     <div class="colorbar">
@@ -941,6 +970,7 @@ pub fn RegionMap(
                             <span>{crate::components::chart::fmt_val(mid)}</span>
                             <span>{crate::components::chart::fmt_val(vmax)}</span>
                         </div>
+                        <div class="colorbar-avg">{avg_txt}</div>
                         <div class="colorbar-note">
                             {if unit.is_empty() {
                                 format!("{n} {}", l.t().stations_measuring)
