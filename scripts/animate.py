@@ -158,28 +158,30 @@ def load_daily(station_id, substance):
 # ── Buckets ──
 def make_buckets(start: date, end: date, bucket: str):
     """Yield (bucket_start, bucket_end_exclusive, label) over [start, end]."""
+    # Labels use fixed-width numeric formats (YYYY-MM-DD / YYYY-MM / YYYY) so the
+    # caption doesn't jitter frame-to-frame as variable-width month names would.
     out = []
     if bucket == "week":
         cur = start - timedelta(days=start.weekday())  # align to Monday
         while cur <= end:
             nxt = cur + timedelta(days=7)
-            out.append((cur, nxt, f"Week of {cur:%Y-%m-%d}"))
+            out.append((cur, nxt, cur.isoformat()))  # YYYY-MM-DD (week start)
             cur = nxt
     elif bucket == "month":
         y, m = start.year, start.month
         while date(y, m, 1) <= end:
             nm_y, nm_m = (y + 1, 1) if m == 12 else (y, m + 1)
-            out.append((date(y, m, 1), date(nm_y, nm_m, 1), f"{date(y, m, 1):%B %Y}"))
+            out.append((date(y, m, 1), date(nm_y, nm_m, 1), f"{y:04d}-{m:02d}"))  # YYYY-MM
             y, m = nm_y, nm_m
     elif bucket == "year":
         for y in range(start.year, end.year + 1):
-            out.append((date(y, 1, 1), date(y + 1, 1, 1), str(y)))
+            out.append((date(y, 1, 1), date(y + 1, 1, 1), str(y)))  # YYYY
     else:  # "<N>d"
         n = int(bucket.rstrip("d"))
         cur = start
         while cur <= end:
             nxt = cur + timedelta(days=n)
-            out.append((cur, nxt, f"{cur:%Y-%m-%d} – {nxt - timedelta(days=1):%Y-%m-%d}"))
+            out.append((cur, nxt, cur.isoformat()))  # YYYY-MM-DD (bucket start)
             cur = nxt
     return out
 
