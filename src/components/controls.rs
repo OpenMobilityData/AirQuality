@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use leptos::prelude::*;
 
 use crate::data::pollutants;
-use crate::data::types::{Interval, Profile, Stat, Station, View};
+use crate::data::types::{DayType, Interval, Profile, Stat, Station, View};
 use crate::i18n::Lang;
 
 /// The filter sidebar. Shows the substance/statistic pickers in Map view and
@@ -26,6 +26,15 @@ pub fn Sidebar(
     on_year_from: Callback<i32>,
     on_year_to: Callback<i32>,
     on_year_range: Callback<(i32, i32)>,
+
+    /// Map time-of-day window (inclusive local hours 0..23) and day-type filter.
+    hour_from: ReadSignal<u8>,
+    hour_to: ReadSignal<u8>,
+    on_hour_from: Callback<u8>,
+    on_hour_to: Callback<u8>,
+    on_hour_range: Callback<(u8, u8)>,
+    day_type: ReadSignal<DayType>,
+    on_day_type: Callback<DayType>,
 
     stations: ReadSignal<Vec<Station>>,
     selected_station: ReadSignal<Option<u32>>,
@@ -146,6 +155,67 @@ pub fn Sidebar(
                                     class=move || if stat.get() == s { "active" } else { "" }
                                     on:click=move |_| on_stat.run(s)>
                                     {move || s.label(lang.get())}
+                                </button>
+                            }
+                        }).collect_view()}
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label class="section-label">{move || lang.get().t().time_of_day}</label>
+                    // "All hours" resets to the full day (and avoids loading the
+                    // detailed stats file until the user actually narrows the window).
+                    <div class="btn-group">
+                        {move || {
+                            let active = hour_from.get() == 0 && hour_to.get() == 23;
+                            view! {
+                                <button class=if active { "active" } else { "" }
+                                        on:click=move |_| on_hour_range.run((0, 23))>
+                                    {lang.get().t().all_hours}
+                                </button>
+                            }
+                        }}
+                    </div>
+                    // From start-of-hour → end-of-hour (labelled :59 so the window
+                    // reads inclusively, e.g. 07:00 → 09:59 = the 7, 8 and 9 o'clock hours).
+                    <div class="year-range">
+                        <select class="substance-select"
+                                on:change=move |e| {
+                                    if let Ok(h) = event_target_value(&e).parse::<u8>() {
+                                        on_hour_from.run(h);
+                                    }
+                                }>
+                            {move || {
+                                let sel = hour_from.get();
+                                (0u8..24).map(|h| {
+                                    view! { <option value=h.to_string() selected=h == sel>{format!("{h:02}:00")}</option> }
+                                }).collect_view()
+                            }}
+                        </select>
+                        <span class="year-range-sep">"→"</span>
+                        <select class="substance-select"
+                                on:change=move |e| {
+                                    if let Ok(h) = event_target_value(&e).parse::<u8>() {
+                                        on_hour_to.run(h);
+                                    }
+                                }>
+                            {move || {
+                                let sel = hour_to.get();
+                                (0u8..24).map(|h| {
+                                    view! { <option value=h.to_string() selected=h == sel>{format!("{h:02}:59")}</option> }
+                                }).collect_view()
+                            }}
+                        </select>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label class="section-label">{move || lang.get().t().day_type}</label>
+                    <div class="btn-group">
+                        {DayType::all().iter().map(|&d| {
+                            view! {
+                                <button
+                                    class=move || if day_type.get() == d { "active" } else { "" }
+                                    on:click=move |_| on_day_type.run(d)>
+                                    {move || d.label(lang.get())}
                                 </button>
                             }
                         }).collect_view()}

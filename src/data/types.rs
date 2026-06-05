@@ -40,6 +40,48 @@ pub struct MapStat {
     pub n: u32,
 }
 
+/// Compact, array-encoded map cell `[mean, median, min, max, n]` — the on-disk
+/// shape of every bucket in `map-stats-detailed.json`. Array encoding keeps the
+/// hour × day-type file small; convert to a `MapStat` for aggregation.
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct StatArr(pub f64, pub f64, pub f64, pub f64, pub u32);
+
+impl StatArr {
+    pub fn to_map_stat(self) -> MapStat {
+        MapStat { mean: self.0, median: self.1, min: self.2, max: self.3, n: self.4 }
+    }
+}
+
+/// One station/substance/year's detailed cell: 24 hourly buckets (local Montréal
+/// hour 0..23) for weekday and weekend; an empty hour×day-type bucket is `None`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DayBuckets {
+    pub wd: Vec<Option<StatArr>>,
+    pub we: Vec<Option<StatArr>>,
+}
+
+/// Day-type filter for the map: which days feed the time-of-day aggregation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DayType {
+    All,
+    Weekday,
+    Weekend,
+}
+
+impl DayType {
+    pub fn all() -> &'static [DayType] {
+        &[DayType::All, DayType::Weekday, DayType::Weekend]
+    }
+    pub fn label(self, lang: Lang) -> &'static str {
+        let t = lang.t();
+        match self {
+            DayType::All => t.days_all,
+            DayType::Weekday => t.prof_weekday,
+            DayType::Weekend => t.prof_weekend,
+        }
+    }
+}
+
 /// Per-station IQA dominant-pollutant summary (one entry of `iqa-dominance.json`).
 /// `shares` lists each pollutant's fraction of hours it drove the index, sorted
 /// descending; `peak_pollutant` drove the single worst hour (`peak_iqa`).

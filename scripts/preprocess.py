@@ -13,6 +13,7 @@ blank line in some years), so parsing is deliberately tolerant — see
 Outputs (under ``static/data/``):
   stations.json                     station metadata + years each reported
   map-stats.json                    {year|"all" -> station -> substance -> {mean,median,min,max,n}}
+  map-stats-detailed.json           {year -> station -> substance -> {wd,we: [[mean,median,min,max,n]|null x24]}}
   iqa-dominance.json                {year -> station -> {peak_pollutant,peak_iqa,shares}}
   series-daily/station-<id>.json    daily means per substance across all years
   series/station-<id>-<year>.json   hourly values per station-year (loaded on demand)
@@ -189,6 +190,33 @@ def stat_cell(values: list[float]) -> dict:
     }
 
 
+def stat_cell_compact(values: list[float]) -> list:
+    """Compact ``[mean, median, min, max, n]`` cell for the detailed map stats.
+    Same math as ``stat_cell`` but array-encoded to keep the bucketed file small."""
+    return [
+        round(statistics.fmean(values), 4),
+        round(statistics.median(values), 4),
+        round(min(values), 4),
+        round(max(values), 4),
+        len(values),
+    ]
+
+
+# (local hour 0-23, is_weekend) per UTC instant, in Montréal time. Memoized within
+# a year (timestamps repeat across stations/substances) to avoid re-running the
+# tz conversion millions of times; cleared at the top of each year.
+_LOCAL_HW: dict = {}
+
+
+def local_hour_weekend(ts) -> tuple:
+    hw = _LOCAL_HW.get(ts)
+    if hw is None:
+        loc = ts.astimezone(MONTREAL)
+        hw = (loc.hour, loc.weekday() >= 5)
+        _LOCAL_HW[ts] = hw
+    return hw
+
+
 def iqa_bundle_for_year(year: int) -> str | None:
     for path in glob.glob(os.path.join(RAW, "rsqa-indice-qualite-air-*.csv")):
         m = re.search(r"(\d{4})-(\d{4})", os.path.basename(path))
@@ -215,6 +243,7 @@ def main() -> None:
     daily: dict[tuple, list] = defaultdict(lambda: [0.0, 0])  # (sid,sub,ordinal) -> [sum,count]
     all_acc: dict[tuple, dict] = {}                            # (sid,sub) -> {sum,min,max,n}
     map_stats: dict[str, dict] = {}                            # year|"all" -> sid -> sub -> cell
+    detailed_stats: dict[str, dict] = {}                       # year -> sid -> sub -> {wd,we: [cell|null x24]}
     iqa_dom: dict[str, dict] = {}                              # year -> sid -> {...}
     station_years: dict[int, set] = defaultdict(set)
     present_subs: set[str] = set()
@@ -343,10 +372,23 @@ def main() -> None:
         ybase = year_base_utc(year)
         per_station_subs: dict[int, dict] = defaultdict(dict)
         ymap = map_stats.setdefault(str(year), {})
+        ydet = detailed_stats.setdefault(str(year), {})
+        _LOCAL_HW.clear()
         for (sid, sub), vals in buf.items():
             if sid not in coords:
                 continue  # only emit data for mappable (coordinate-having) stations
             ymap.setdefault(str(sid), {})[sub] = stat_cell([v for _, v in vals])
+            # Hour-of-day × weekday/weekend buckets in local Montréal time, so the
+            # map can filter by time-of-day range and day type. Empty buckets → null.
+            wd = [[] for _ in range(24)]
+            we = [[] for _ in range(24)]
+            for ts, v in vals:
+                h, weekend = local_hour_weekend(ts)
+                (we if weekend else wd)[h].append(v)
+            ydet.setdefault(str(sid), {})[sub] = {
+                "wd": [stat_cell_compact(b) if b else None for b in wd],
+                "we": [stat_cell_compact(b) if b else None for b in we],
+            }
             pairs = sorted(
                 (int((ts - ybase).total_seconds() // 3600), round(v, 4)) for ts, v in vals
             )
@@ -385,6 +427,10 @@ def main() -> None:
 
     with open(os.path.join(OUT, "map-stats.json"), "w", encoding="utf-8") as f:
         json.dump(map_stats, f, ensure_ascii=False, separators=(",", ":"))
+    # Detailed (hour × day-type) stats — numeric years only; the map iterates years
+    # for any active filter, so no "all" fast-path layer is needed here.
+    with open(os.path.join(OUT, "map-stats-detailed.json"), "w", encoding="utf-8") as f:
+        json.dump(detailed_stats, f, ensure_ascii=False, separators=(",", ":"))
     with open(os.path.join(OUT, "iqa-dominance.json"), "w", encoding="utf-8") as f:
         json.dump(iqa_dom, f, ensure_ascii=False, separators=(",", ":"))
 

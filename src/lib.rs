@@ -14,9 +14,9 @@ use components::chart::{Chart, Series};
 use components::controls::Sidebar;
 use components::info::{InfoKind, InfoPage};
 use components::map::RegionMap;
-use data::loader::{self, DailySeries, IqaDominanceMap, MapStats, Meta, SeriesFile};
+use data::loader::{self, DailySeries, DetailedMapStats, IqaDominanceMap, MapStats, Meta, SeriesFile};
 use data::pollutants;
-use data::types::{Interval, Profile, Stat, Station, View};
+use data::types::{DayType, Interval, Profile, Stat, Station, View};
 use i18n::Lang;
 
 /// Fixed anchor for synthetic profile axes — a Monday at UTC midnight. Diurnal
@@ -56,6 +56,10 @@ fn App() -> impl IntoView {
     let (stations, set_stations) = signal::<Vec<Station>>(vec![]);
     let (map_stats, set_map_stats) = signal::<MapStats>(BTreeMap::new());
     let (iqa_dominance, set_iqa_dominance) = signal::<IqaDominanceMap>(BTreeMap::new());
+    // Detailed (hour × day-type) map stats — large, so loaded lazily the first
+    // time a time-of-day or day-type filter is narrowed (see the effect below).
+    let (map_detailed, set_map_detailed) = signal::<Option<DetailedMapStats>>(None);
+    let (detailed_loading, set_detailed_loading) = signal(false);
     let (meta, set_meta) = signal::<Option<Meta>>(None);
     let (active_subs, set_active_subs) = signal::<Vec<String>>(vec![]);
     let (years, set_years) = signal::<Vec<i32>>(vec![]);
@@ -73,6 +77,11 @@ fn App() -> impl IntoView {
     // the whole record (set from meta), so the map opens on the full overview.
     let (year_from, set_year_from) = signal(1986);
     let (year_to, set_year_to) = signal(2024);
+    // Map time-of-day filter: an inclusive local-hour window; [0, 23] = whole day.
+    let (hour_from, set_hour_from) = signal(0u8);
+    let (hour_to, set_hour_to) = signal(23u8);
+    // Map day-type filter (all days / weekdays / weekends).
+    let (day_type, set_day_type) = signal(DayType::All);
     let (selected_station, set_selected_station) = signal::<Option<u32>>(None);
     let (interval, set_interval) = signal(Interval::Month);
     // Averaging profile (None = ordinary time series).
@@ -126,6 +135,28 @@ fn App() -> impl IntoView {
             }
             Err(e) => web_sys::console::error_1(&format!("meta: {e}").into()),
         }
+    });
+
+    // ── Lazily load the detailed map stats on first use of a Map filter ──
+    // The big hour × day-type file is only needed once the user narrows the
+    // time-of-day window or day type; until then the slim map-stats suffice.
+    Effect::new(move |_| {
+        let filtered =
+            hour_from.get() != 0 || hour_to.get() != 23 || day_type.get() != DayType::All;
+        if !filtered
+            || detailed_loading.get_untracked()
+            || map_detailed.with_untracked(|o| o.is_some())
+        {
+            return;
+        }
+        set_detailed_loading.set(true);
+        spawn_local(async move {
+            match loader::fetch_map_stats_detailed().await {
+                Ok(d) => set_map_detailed.set(Some(d)),
+                Err(e) => web_sys::console::error_1(&format!("map-stats-detailed: {e}").into()),
+            }
+            set_detailed_loading.set(false);
+        });
     });
 
     // ── Date presets (depend on the loaded span + language) ──
@@ -421,6 +452,25 @@ fn App() -> impl IntoView {
         set_year_from.set(f);
         set_year_to.set(t);
     });
+    // Time-of-day window: keep from ≤ to (no overnight wrap), clamping the other
+    // end like the year-range callbacks do.
+    let on_hour_from = Callback::new(move |h: u8| {
+        set_hour_from.set(h);
+        if hour_to.get_untracked() < h {
+            set_hour_to.set(h);
+        }
+    });
+    let on_hour_to = Callback::new(move |h: u8| {
+        set_hour_to.set(h);
+        if hour_from.get_untracked() > h {
+            set_hour_from.set(h);
+        }
+    });
+    let on_hour_range = Callback::new(move |(f, t): (u8, u8)| {
+        set_hour_from.set(f);
+        set_hour_to.set(t);
+    });
+    let on_day_type = Callback::new(move |d: DayType| set_day_type.set(d));
     let on_station = Callback::new(move |id: u32| set_selected_station.set(Some(id)));
     let on_interval = Callback::new(move |iv: Interval| set_interval.set(iv));
     // Toggle a profile: clicking the active one turns it back off.
@@ -493,6 +543,13 @@ fn App() -> impl IntoView {
                 on_year_from=on_year_from
                 on_year_to=on_year_to
                 on_year_range=on_year_range
+                hour_from=hour_from
+                hour_to=hour_to
+                on_hour_from=on_hour_from
+                on_hour_to=on_hour_to
+                on_hour_range=on_hour_range
+                day_type=day_type
+                on_day_type=on_day_type
                 stations=stations
                 selected_station=selected_station
                 on_station=on_station
@@ -519,6 +576,10 @@ fn App() -> impl IntoView {
                             year_to=year_to
                             substance=selected_substance
                             stat=stat
+                            hour_from=hour_from
+                            hour_to=hour_to
+                            day_type=day_type
+                            detailed=map_detailed
                         />
                     }.into_any(),
                     View::Series => view! {

@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc};
 use serde::Deserialize;
 
-use crate::data::types::{Interval, IqaDominance, MapStat, Reading, Station};
+use crate::data::types::{DayBuckets, Interval, IqaDominance, MapStat, Reading, Station};
 
 // ── Fetch helpers ──────────────────────────────────────────────────────────
 
@@ -31,6 +31,16 @@ pub type MapStats = BTreeMap<String, YearStats>;
 
 pub async fn fetch_map_stats() -> Result<MapStats, String> {
     fetch_json("data/map-stats.json").await
+}
+
+/// `map-stats-detailed.json` → `{ year -> station -> substance -> DayBuckets }`
+/// (numeric years only — no `"all"` layer; the map aggregates years for any
+/// active hour/day filter). Loaded lazily when a time-of-day or day-type filter
+/// is first narrowed.
+pub type DetailedMapStats = BTreeMap<String, BTreeMap<String, BTreeMap<String, DayBuckets>>>;
+
+pub async fn fetch_map_stats_detailed() -> Result<DetailedMapStats, String> {
+    fetch_json("data/map-stats-detailed.json").await
 }
 
 /// `iqa-dominance.json` → `{ year -> { station -> IqaDominance } }`. Optional
