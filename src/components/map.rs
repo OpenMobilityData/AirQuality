@@ -577,9 +577,18 @@ pub fn RegionMap(
     let container_ref = NodeRef::<leptos::html::Div>::new();
     let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
 
-    // Measured container size; re-measured on mount and on window resize.
+    // Measured container size. We watch the container's *own* box with a
+    // ResizeObserver, not just the window's resize event: layout changes that
+    // resize the map without resizing the window must still re-measure. The
+    // chief offender is opening the mobile "Filters" sidebar, which on phones
+    // drops into a grid row above the map and shrinks it (also: iOS Safari's
+    // URL-bar show/hide and orientation changes). Without re-measuring, the
+    // canvas bitmap (sized in px) stays CSS-stretched to a different box than
+    // the px-positioned tiles and markers — distorting the heatmap and
+    // misaligning the overlay, sometimes persisting after the sidebar closes.
     let (size, set_size) = signal((0.0_f64, 0.0_f64));
     let (resize_tick, set_resize_tick) = signal(0u32);
+    // Window resize is kept as a fallback for any browser lacking ResizeObserver.
     let _ = leptos::prelude::window_event_listener(leptos::ev::resize, move |_| {
         set_resize_tick.update(|n| *n = n.wrapping_add(1));
     });
@@ -590,16 +599,39 @@ pub fn RegionMap(
             set_size.set((rect.width(), rect.height()));
         }
     });
-    // One delayed re-measure to catch the grid's final layout after first paint.
-    Effect::new(move |_| {
-        if container_ref.get().is_some() {
-            let cb = wasm_bindgen::closure::Closure::once_into_js(move || {
-                set_resize_tick.update(|n| *n = n.wrapping_add(1));
-            });
-            let _ = web_sys::window().unwrap().set_timeout_with_callback_and_timeout_and_arguments_0(
-                cb.as_ref().unchecked_ref(),
-                60,
-            );
+    // Attach the ResizeObserver once, when the container first mounts. It fires
+    // immediately on observe (giving us the correct first measurement, so the
+    // old post-paint re-measure timer is no longer needed) and on every box
+    // change thereafter.
+    Effect::new(move |attached: Option<bool>| {
+        if attached == Some(true) {
+            return true;
+        }
+        let Some(el) = container_ref.get() else { return false };
+        let target: web_sys::Element = el.unchecked_into();
+        let cb = Closure::<dyn FnMut()>::new(move || {
+            set_resize_tick.update(|n| *n = n.wrapping_add(1));
+        });
+        match web_sys::ResizeObserver::new(cb.as_ref().unchecked_ref()) {
+            Ok(observer) => {
+                observer.observe(&target);
+                // Hold the observer + callback in owner-scoped local storage so
+                // they live as long as the component, and disconnect on unmount
+                // (so the dropped closure is never invoked after teardown). The
+                // cleanup captures only the Send+Sync StoredValue handle.
+                let held = StoredValue::new_local(Some((observer, cb)));
+                on_cleanup(move || {
+                    held.try_update_value(|slot| {
+                        if let Some((obs, _cb)) = slot.take() {
+                            obs.disconnect();
+                        }
+                    });
+                });
+                true
+            }
+            // Construction failed (no ResizeObserver support); fall back to the
+            // window listener above. Returning false lets a later ref change retry.
+            Err(_) => false,
         }
     });
 
