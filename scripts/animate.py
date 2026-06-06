@@ -11,8 +11,10 @@ stamps each frame with its date. The colour scale is fixed across all frames so
 colours are comparable over time.
 
 Reads the committed daily tier (static/data/series-daily/station-<id>.json +
-stations.json), so it's well suited to bucket sizes of a day or longer
-(week/month/year). Sub-day buckets would need the hourly tier.
+stations.json) for the chronological buckets (week/month/year/<N>d). The
+"weekday" mode instead reads the hourly tier (static/data/series/station-
+<id>-<year>.json) to build a within-day (diurnal) average — 24 frames, one per
+Montréal-local hour, each averaging every weekday (Mon–Fri) in the range.
 
 Requirements (local only):
     pip3 install pillow numpy
@@ -23,6 +25,8 @@ Examples:
     python3 scripts/animate.py --substance PM2.5 --bucket week --from 2023-01-01
     python3 scripts/animate.py --substance IQA --bucket month
     python3 scripts/animate.py --substance NO2 --bucket 10d --from 2024-01-01 --to 2024-12-31
+    # Weekday time-of-day average (24 hourly frames over the chosen range):
+    python3 scripts/animate.py --substance NO --bucket weekday --from 2023-01-01 --to 2024-12-31
 """
 
 from __future__ import annotations
@@ -36,7 +40,7 @@ import subprocess
 import sys
 import time
 import urllib.request
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 try:
     import numpy as np
@@ -153,6 +157,64 @@ def load_daily(station_id, substance):
     base = date.fromisoformat(d["start_date"]).toordinal()
     arr = np.array(pairs, dtype=float)  # columns: day_index, value
     return (arr[:, 0].astype(np.int64) + base), arr[:, 1]
+
+
+def hourly_path(station_id, year):
+    return os.path.join(DATA, "series", f"station-{station_id}-{year}.json")
+
+
+def accumulate_weekday_diurnal(stations, substance, start, end):
+    """Mean of `substance` by Montréal-local hour-of-day (0–23), over weekdays
+    (Mon–Fri) within [start, end], read from the hourly tier.
+
+    Returns ({station_id: ndarray(24)} with NaN for empty hours, files_read).
+    Sums/counts are accumulated per station-hour so memory stays flat whatever
+    the range; only stations with at least one weekday reading are returned.
+    Hour-of-day and weekday are taken in Montréal local time (DST-aware), to
+    match the web app's Weekday profile."""
+    from zoneinfo import ZoneInfo  # stdlib (3.9+); imported lazily
+
+    tz = ZoneInfo("America/Montreal")
+    lo_ord, hi_ord = start.toordinal(), end.toordinal()
+    years = range(start.year, end.year + 1)
+    sums = {s["id"]: np.zeros(24) for s in stations}
+    cnts = {s["id"]: np.zeros(24, dtype=np.int64) for s in stations}
+    files_read = 0
+    for s in stations:
+        sid = s["id"]
+        for y in years:
+            path = hourly_path(sid, y)
+            if not os.path.exists(path):
+                continue
+            doc = json.load(open(path, encoding="utf-8"))
+            rows = doc.get("substances", {}).get(substance)
+            if not rows:
+                continue
+            files_read += 1
+            base = datetime.fromisoformat(doc["start_utc"].replace("Z", "+00:00"))
+            step = int(doc.get("step_secs", 3600))
+            ssum, scnt = sums[sid], cnts[sid]
+            for idx, val in rows:
+                local = (base + timedelta(seconds=int(idx) * step)).astimezone(tz)
+                if local.weekday() >= 5:          # drop Sat/Sun
+                    continue
+                o = local.toordinal()
+                if o < lo_ord or o > hi_ord:      # outside the requested range
+                    continue
+                h = local.hour
+                ssum[h] += val
+                scnt[h] += 1
+        if cnts[sid].sum():
+            print(f"  {s.get('name', sid)} (#{sid}): {int(cnts[sid].sum())} weekday hours")
+    means = {}
+    for sid, c in cnts.items():
+        if c.sum() == 0:
+            continue
+        m = np.full(24, np.nan)
+        nz = c > 0
+        m[nz] = sums[sid][nz] / c[nz]
+        means[sid] = m
+    return means, files_read
 
 
 # ── Buckets ──
@@ -345,7 +407,9 @@ def draw_caption(img, draw, label, substance, n, agg_label):
 def main():
     ap = argparse.ArgumentParser(description="Render RSQA map animation frames.")
     ap.add_argument("--substance", default="PM2.5", help="pollutant key or IQA (default PM2.5)")
-    ap.add_argument("--bucket", default="week", help="week | month | year | <N>d (default week)")
+    ap.add_argument("--bucket", default="week",
+                    help="week | month | year | <N>d | weekday  (default week; 'weekday' = "
+                         "24-frame within-day average over weekdays, from the hourly tier)")
     ap.add_argument("--from", dest="dfrom", help="start date YYYY-MM-DD (default: data start)")
     ap.add_argument("--to", dest="dto", help="end date YYYY-MM-DD (default: data end)")
     ap.add_argument("--out", help="output directory (default anim/<sub>_<bucket>/)")
@@ -363,50 +427,87 @@ def main():
     if not stations:
         sys.exit(f"No stations measure '{sub}'. Check the substance key.")
 
-    # Load each station's daily series for the substance.
-    series = {}
-    for s in stations:
-        ords, vals = load_daily(s["id"], sub)
-        if ords is not None:
-            series[s["id"]] = (ords, vals)
-    if not series:
-        sys.exit(f"No daily data found for '{sub}'.")
+    weekday_mode = args.bucket == "weekday"
 
-    all_ords = np.concatenate([o for o, _ in series.values()])
-    data_start = date.fromordinal(int(all_ords.min()))
-    data_end = date.fromordinal(int(all_ords.max()))
-    start = date.fromisoformat(args.dfrom) if args.dfrom else data_start
-    end = date.fromisoformat(args.dto) if args.dto else data_end
+    if weekday_mode:
+        # ── Weekday time-of-day (diurnal) mode ──
+        # 24 frames, one per Montréal-local hour, each the mean over every
+        # weekday (Mon–Fri) in range. Reads the hourly tier (the daily tier has
+        # no within-day detail). The data span comes from station metadata.
+        years_all = sorted({y for s in stations for y in s.get("years", [])})
+        if not years_all:
+            sys.exit(f"No reporting years listed for '{sub}'.")
+        data_start, data_end = date(years_all[0], 1, 1), date(years_all[-1], 12, 31)
+        start = date.fromisoformat(args.dfrom) if args.dfrom else data_start
+        end = date.fromisoformat(args.dto) if args.dto else data_end
+        n_years = end.year - start.year + 1
+        print(f"Substance: {sub} | mode: weekday diurnal (24 hourly frames, Montréal local)")
+        print(f"Range: {start}..{end} ({n_years} year[s]) | weekdays only | hourly tier")
+        if n_years > 5:
+            print(f"  NOTE: scanning {n_years} years of hourly data can be slow — "
+                  f"narrow with --from/--to to speed it up.")
+        means, files_read = accumulate_weekday_diurnal(stations, sub, start, end)
+        if not means:
+            sys.exit("No weekday hourly readings in range. Is the hourly tier present in "
+                     "static/data/series/? It ships via `deploy.sh --data`, not git.")
+        # Pass 1: per-hour {station_id: mean} + the fixed global colour range.
+        frame_values = []
+        gmin, gmax = math.inf, -math.inf
+        for h in range(24):
+            vals = {}
+            for sid, m in means.items():
+                if not math.isnan(m[h]):
+                    vals[sid] = float(m[h])
+                    gmin, gmax = min(gmin, vals[sid]), max(gmax, vals[sid])
+            frame_values.append((None, None, f"{h:02d}:00", vals))
+        print(f"Stations with weekday data: {len(means)} | hourly files read: {files_read} | frames: 24")
+        agg_label = "weekday diurnal mean (local time)"
+    else:
+        # ── Chronological bucket mode (daily tier) ──
+        # Load each station's daily series for the substance.
+        series = {}
+        for s in stations:
+            ords, vals = load_daily(s["id"], sub)
+            if ords is not None:
+                series[s["id"]] = (ords, vals)
+        if not series:
+            sys.exit(f"No daily data found for '{sub}'.")
 
-    buckets = make_buckets(start, end, args.bucket)
-    print(f"Substance: {sub} | bucket: {args.bucket} | range: {start}..{end}")
-    print(f"Stations: {len(series)} | frames: {len(buckets)}")
-    if not buckets:
-        sys.exit("No buckets in range.")
-    if len(buckets) > 1200:
-        print(f"  WARNING: {len(buckets)} frames is a lot — consider --from/--to or a larger bucket.")
+        all_ords = np.concatenate([o for o, _ in series.values()])
+        data_start = date.fromordinal(int(all_ords.min()))
+        data_end = date.fromordinal(int(all_ords.max()))
+        start = date.fromisoformat(args.dfrom) if args.dfrom else data_start
+        end = date.fromisoformat(args.dto) if args.dto else data_end
 
-    # Pass 1: per-bucket {station_id: mean}, and the fixed global colour range.
-    frame_values = []
-    gmin, gmax = math.inf, -math.inf
-    for bstart, bend, label in buckets:
-        lo, hi = bstart.toordinal(), bend.toordinal()
-        vals = {}
-        for sid, (ords, vv) in series.items():
-            mask = (ords >= lo) & (ords < hi)
-            if mask.any():
-                m = float(vv[mask].mean())
-                vals[sid] = m
-                gmin, gmax = min(gmin, m), max(gmax, m)
-        frame_values.append((bstart, bend, label, vals))
+        buckets = make_buckets(start, end, args.bucket)
+        print(f"Substance: {sub} | bucket: {args.bucket} | range: {start}..{end}")
+        print(f"Stations: {len(series)} | frames: {len(buckets)}")
+        if not buckets:
+            sys.exit("No buckets in range.")
+        if len(buckets) > 1200:
+            print(f"  WARNING: {len(buckets)} frames is a lot — consider --from/--to or a larger bucket.")
+
+        # Pass 1: per-bucket {station_id: mean}, and the fixed global colour range.
+        frame_values = []
+        gmin, gmax = math.inf, -math.inf
+        for bstart, bend, label in buckets:
+            lo, hi = bstart.toordinal(), bend.toordinal()
+            vals = {}
+            for sid, (ords, vv) in series.items():
+                mask = (ords >= lo) & (ords < hi)
+                if mask.any():
+                    m = float(vv[mask].mean())
+                    vals[sid] = m
+                    gmin, gmax = min(gmin, m), max(gmax, m)
+            frame_values.append((bstart, bend, label, vals))
+        agg_label = {"week": "weekly mean", "month": "monthly mean", "year": "annual mean"}.get(
+            args.bucket, f"{args.bucket} mean")
+
     if gmin is math.inf:
         sys.exit("No data in the selected range.")
     vmin = args.vmin if args.vmin is not None else gmin
     vmax = args.vmax if args.vmax is not None else gmax
     print(f"Colour scale: {'IQA bands (0–100)' if is_iqa else f'{vmin:.2f} … {vmax:.2f}'}")
-
-    agg_label = {"week": "weekly mean", "month": "monthly mean", "year": "annual mean"}.get(
-        args.bucket, f"{args.bucket} mean")
 
     geom = compute_geom(stations, args.width, args.height)
     print(f"Canvas: {geom['w']}×{geom['h']} @ zoom {geom['z']}")
