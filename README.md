@@ -1,4 +1,4 @@
-# AirQuality
+# AirQualityMTL
 
 Web application for visualizing the **Réseau de surveillance de la qualité de
 l'air (RSQA)** hourly multi-pollutant measurements from the City of Montréal's

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and deploy AirQuality to the production VPS.
+# Build and deploy AirQualityMTL to the production VPS.
 #
 # Served at https://mtl-aq.org — hosted on the same server as bikestat.org
 # under its own vhost. Override the destination with AIRQUALITY_REMOTE /

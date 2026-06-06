@@ -536,8 +536,8 @@ fn App() -> impl IntoView {
                     }}
                 </button>
                 <h1>
-                    <a href="https://github.com/OpenMobilityData/AirQuality"
-                       target="_blank" rel="noopener noreferrer">"AirQuality"</a>
+                    <a href="https://github.com/OpenMobilityData/AirQualityMTL"
+                       target="_blank" rel="noopener noreferrer">"AirQualityMTL"</a>
                 </h1>
                 <span class="subtitle">{move || lang.get().t().subtitle}</span>
 
