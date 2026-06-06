@@ -174,11 +174,13 @@ pub enum View {
     Methods,
     /// Air-quality limits and guidelines reference.
     Limits,
+    /// Curated external links for further reading.
+    Links,
 }
 
 impl View {
     /// True for the read-only article views, which hide the filter sidebar.
     pub fn is_info(self) -> bool {
-        matches!(self, View::Network | View::Methods | View::Limits)
+        matches!(self, View::Network | View::Methods | View::Limits | View::Links)
     }
 }

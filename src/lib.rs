@@ -162,7 +162,7 @@ fn App() -> impl IntoView {
     let substance_options = Memo::new(move |_| {
         let subs = active_subs.get();
         match view.get() {
-            View::Map | View::Network | View::Methods | View::Limits => subs,
+            View::Map | View::Network | View::Methods | View::Limits | View::Links => subs,
             View::Series => match selected_station.get() {
                 Some(sid) => stations
                     .get()
@@ -535,7 +535,10 @@ fn App() -> impl IntoView {
                         if sidebar_open.get() { t.mobile_close } else { t.mobile_filters }
                     }}
                 </button>
-                <h1>"AirQuality"</h1>
+                <h1>
+                    <a href="https://github.com/OpenMobilityData/AirQuality"
+                       target="_blank" rel="noopener noreferrer">"AirQuality"</a>
+                </h1>
                 <span class="subtitle">{move || lang.get().t().subtitle}</span>
 
                 <div class="view-toggle">
@@ -558,6 +561,10 @@ fn App() -> impl IntoView {
                     <button class=move || if view.get() == View::Limits { "active" } else { "" }
                             on:click=move |_| set_view.set(View::Limits)>
                         {move || lang.get().t().view_limits}
+                    </button>
+                    <button class=move || if view.get() == View::Links { "active" } else { "" }
+                            on:click=move |_| set_view.set(View::Links)>
+                        {move || lang.get().t().view_links}
                     </button>
                 </div>
 
@@ -628,6 +635,7 @@ fn App() -> impl IntoView {
                     View::Network => view! { <InfoPage kind=InfoKind::Network /> }.into_any(),
                     View::Methods => view! { <InfoPage kind=InfoKind::Methods /> }.into_any(),
                     View::Limits => view! { <InfoPage kind=InfoKind::Limits /> }.into_any(),
+                    View::Links => view! { <InfoPage kind=InfoKind::Links /> }.into_any(),
                 }}
             </main>
         </div>
