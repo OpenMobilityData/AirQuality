@@ -61,15 +61,22 @@ if [ "$mode" = "data" ]; then
     # Content-based compare (--checksum): preprocess (and a git checkout) rewrites
     # files with fresh mtimes, so comparing by checksum means only files whose bytes
     # actually changed (e.g. a newly added year) are transferred.
-    rsync -av --delete --checksum dist/ "${REMOTE}:${DEST}"
+    # Exclude /.well-known/ so --delete leaves the certbot ACME challenge dir (owned
+    # by the cert renewal, not us) intact instead of failing to remove it.
+    rsync -av --delete --checksum \
+        --exclude='/.well-known/' \
+        dist/ "${REMOTE}:${DEST}"
 else
     # Code + daily tier: sync everything except the heavy git-ignored hourly series
     # (~250 MB), which is format-stable and deployed separately via --data. The
     # daily tier IS synced — the Map/Series read it and it must match the code; it's
     # small (~27 MB) and --checksum avoids resending bytes that didn't change.
     # rsync --delete leaves the excluded /data/series/ on the receiver intact while
-    # cleaning stale code bundles (old hashed wasm/js).
+    # cleaning stale code bundles (old hashed wasm/js). /.well-known/ is likewise
+    # excluded so --delete leaves the certbot ACME challenge dir (owned by the cert
+    # renewal, not us) intact instead of failing to remove it.
     rsync -av --delete --checksum \
         --exclude='/data/series/' \
+        --exclude='/.well-known/' \
         dist/ "${REMOTE}:${DEST}"
 fi
