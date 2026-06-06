@@ -159,7 +159,7 @@ pub struct T {
 }
 
 pub const EN: T = T {
-    subtitle: "Montréal air-quality visualizer",
+    subtitle: "Historical air-quality visualizer",
     view_map: "Map",
     view_series: "Time series",
     view_network: "Sources",
@@ -231,7 +231,7 @@ pub const EN: T = T {
 };
 
 pub const FR: T = T {
-    subtitle: "Visualiseur de la qualité de l'air à Montréal",
+    subtitle: "Visualiseur historique de la qualité de l'air",
     view_map: "Carte",
     view_series: "Série temporelle",
     view_network: "Sources",
