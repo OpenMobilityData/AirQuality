@@ -168,7 +168,7 @@ pub const EN: T = T {
     view_links: "Links",
     mobile_filters: "Filters",
     mobile_close: "Close",
-    data_prefix: "RSQA data",
+    data_prefix: "Historical RSQA data",
     generated: "Generated",
     latest_year_label: "Latest available year",
 
@@ -240,7 +240,7 @@ pub const FR: T = T {
     view_links: "Liens",
     mobile_filters: "Filtres",
     mobile_close: "Fermer",
-    data_prefix: "Données RSQA",
+    data_prefix: "Données RSQA historiques",
     generated: "Généré",
     latest_year_label: "Dernière année disponible",
 
