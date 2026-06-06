@@ -217,6 +217,46 @@ def accumulate_weekday_diurnal(stations, substance, start, end):
     return means, files_read
 
 
+def interpolate_frames(frames, k, cyclic):
+    """Insert `k` linearly-interpolated frames between each consecutive pair, so
+    slow playback stays smooth instead of stepping between data frames. Each
+    station present in both endpoints is blended; one present in only a single
+    endpoint is held at its own value so its marker doesn't blink. When `cyclic`
+    (the weekday diurnal day-loop) the last→first pair is bridged too, for a
+    seamless loop, and the time label advances as a smooth HH:MM clock.
+
+    Frame entries are (b0, b1, label, {sid: value}); the synthesized frames
+    carry (None, None, label, vals). Blends stay within each pair's range, so
+    the fixed colour scale computed from the data frames remains valid."""
+    if k <= 0 or len(frames) < 2:
+        return frames
+    seq = list(frames)
+    pairs = list(zip(seq, seq[1:]))
+    if cyclic:
+        pairs.append((seq[-1], seq[0]))
+    out = []
+    for i, (left, right) in enumerate(pairs):
+        out.append(left)  # the real data frame
+        lv, rv = left[3], right[3]
+        sids = set(lv) | set(rv)
+        for j in range(1, k + 1):
+            f = j / (k + 1)
+            vals = {}
+            for sid in sids:
+                a, b = lv.get(sid), rv.get(sid)
+                vals[sid] = a + (b - a) * f if a is not None and b is not None else (
+                    a if a is not None else b)
+            if cyclic:  # smooth clock: pair i bridges hour i → hour i+1
+                tmin = (i * 60 + round(f * 60)) % (24 * 60)
+                label = f"{tmin // 60:02d}:{tmin % 60:02d}"
+            else:
+                label = left[2]  # hold the period label across the morph
+            out.append((None, None, label, vals))
+    if not cyclic:
+        out.append(seq[-1])  # final real frame (cyclic already loops back to seq[0])
+    return out
+
+
 # ── Buckets ──
 def make_buckets(start: date, end: date, bucket: str):
     """Yield (bucket_start, bucket_end_exclusive, label) over [start, end]."""
@@ -414,6 +454,9 @@ def main():
     ap.add_argument("--to", dest="dto", help="end date YYYY-MM-DD (default: data end)")
     ap.add_argument("--out", help="output directory (default anim/<sub>_<bucket>/)")
     ap.add_argument("--fps", type=int, default=8, help="MP4 frame rate (default 8)")
+    ap.add_argument("--interp", type=int, default=0,
+                    help="insert N interpolated frames between each pair for smooth slow "
+                         "playback (0 = off; 'weekday' wraps 23:00→00:00 for a seamless loop)")
     ap.add_argument("--width", type=int, default=1100, help="target map width px (default 1100)")
     ap.add_argument("--height", type=int, default=820, help="target map height px (default 820)")
     ap.add_argument("--no-basemap", action="store_true", help="plain dark background, no tiles")
@@ -508,6 +551,10 @@ def main():
     vmin = args.vmin if args.vmin is not None else gmin
     vmax = args.vmax if args.vmax is not None else gmax
     print(f"Colour scale: {'IQA bands (0–100)' if is_iqa else f'{vmin:.2f} … {vmax:.2f}'}")
+
+    if args.interp > 0:
+        frame_values = interpolate_frames(frame_values, args.interp, cyclic=weekday_mode)
+        print(f"Interpolation: ×{args.interp} between frames → {len(frame_values)} frames")
 
     geom = compute_geom(stations, args.width, args.height)
     print(f"Canvas: {geom['w']}×{geom['h']} @ zoom {geom['z']}")
