@@ -183,4 +183,31 @@ impl View {
     pub fn is_info(self) -> bool {
         matches!(self, View::Network | View::Methods | View::Limits | View::Links)
     }
+
+    /// Stable URL slug for `?view=<slug>` deep links. Deliberately decoupled
+    /// from the translated display labels (which differ from the enum names and
+    /// change over time) so saved links stay valid.
+    pub fn slug(self) -> &'static str {
+        match self {
+            View::Map => "map",
+            View::Series => "series",
+            View::Network => "sources",
+            View::Methods => "methodology",
+            View::Limits => "limits",
+            View::Links => "reading",
+        }
+    }
+
+    /// Inverse of [`slug`](Self::slug); `None` for an unknown slug.
+    pub fn from_slug(s: &str) -> Option<View> {
+        Some(match s {
+            "map" => View::Map,
+            "series" => View::Series,
+            "sources" => View::Network,
+            "methodology" => View::Methods,
+            "limits" => View::Limits,
+            "reading" => View::Links,
+            _ => return None,
+        })
+    }
 }

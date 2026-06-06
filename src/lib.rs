@@ -45,6 +45,27 @@ fn default_substance(opts: &[String]) -> String {
         .unwrap_or_default()
 }
 
+/// Read the active view from the `?view=<slug>` query parameter. `None` when
+/// the parameter is absent or unrecognized, so the caller falls back to the
+/// default view. Slugs are plain ASCII, so a manual parse avoids pulling in the
+/// `UrlSearchParams` web-sys feature.
+fn view_from_url() -> Option<View> {
+    let search = web_sys::window()?.location().search().ok()?;
+    search
+        .trim_start_matches('?')
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("view=").and_then(View::from_slug))
+}
+
+/// Record a view in the browser history as `?view=<slug>`, so the address bar
+/// is shareable and Back/Forward step between tabs.
+fn push_view_url(v: View) {
+    if let Some(history) = web_sys::window().and_then(|w| w.history().ok()) {
+        let url = format!("?view={}", v.slug());
+        let _ = history.push_state_with_url(&JsValue::NULL, "", Some(&url));
+    }
+}
+
 #[component]
 fn App() -> impl IntoView {
     // ── Language (persisted; provided as context) ──
@@ -65,7 +86,8 @@ fn App() -> impl IntoView {
         signal::<BTreeMap<(u32, i32), SeriesFile>>(BTreeMap::new());
 
     // ── UI state ──
-    let (view, set_view) = signal(View::Map);
+    // Open on the view named by `?view=<slug>` (shareable deep link), else Map.
+    let (view, set_view) = signal(view_from_url().unwrap_or(View::Map));
     let (selected_substance, set_selected_substance) = signal(String::from("NO"));
     let (stat, set_stat) = signal(Stat::Mean);
     // Map averaging window: an arbitrary [from, to] date range, kept separate from
@@ -86,6 +108,33 @@ fn App() -> impl IntoView {
     let (date_to, set_date_to) = signal(NaiveDate::from_ymd_opt(2024, 12, 31).unwrap());
     let (date_presets, set_date_presets) = signal::<Vec<(String, NaiveDate, NaiveDate)>>(vec![]);
     let (sidebar_open, set_sidebar_open) = signal(false);
+
+    // ── URL ⇄ view sync (query-param deep links + Back/Forward) ──
+    // Keep the document title in step with the active view and language (nicer
+    // browser tabs and bookmarks for the shared `?view=…` links).
+    Effect::new(move |_| {
+        let t = lang.get().t();
+        let label = match view.get() {
+            View::Map => t.view_map,
+            View::Series => t.view_series,
+            View::Network => t.view_network,
+            View::Methods => t.view_methods,
+            View::Limits => t.view_limits,
+            View::Links => t.view_links,
+        };
+        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+            doc.set_title(&format!("AirQualityMTL — {label}"));
+        }
+    });
+    // Follow browser Back/Forward: popstate only *reads* the URL into the view
+    // signal, while tab clicks (`go` below) are the only writers — so the two
+    // never feed back on each other.
+    let _ = leptos::prelude::window_event_listener(leptos::ev::popstate, move |_| {
+        let v = view_from_url().unwrap_or(View::Map);
+        if view.get_untracked() != v {
+            set_view.set(v);
+        }
+    });
 
     // ── Load static data on startup ──
     spawn_local(async move {
@@ -471,6 +520,16 @@ fn App() -> impl IntoView {
     };
 
     // ── Callbacks ──
+    // Switch the active view and record it in history (`?view=<slug>`), so deep
+    // links are shareable and Back/Forward step between tabs. Clicking the
+    // already-active tab is a no-op (no duplicate history entry).
+    let go = Callback::new(move |v: View| {
+        if view.get_untracked() == v {
+            return;
+        }
+        set_view.set(v);
+        push_view_url(v);
+    });
     let on_substance = Callback::new(move |s: String| set_selected_substance.set(s));
     let on_stat = Callback::new(move |s: Stat| set_stat.set(s));
     // Map date range: keep from ≤ to by clamping the other end, mirroring the
@@ -543,27 +602,27 @@ fn App() -> impl IntoView {
 
                 <div class="view-toggle">
                     <button class=move || if view.get() == View::Map { "active" } else { "" }
-                            on:click=move |_| set_view.set(View::Map)>
+                            on:click=move |_| go.run(View::Map)>
                         {move || lang.get().t().view_map}
                     </button>
                     <button class=move || if view.get() == View::Series { "active" } else { "" }
-                            on:click=move |_| set_view.set(View::Series)>
+                            on:click=move |_| go.run(View::Series)>
                         {move || lang.get().t().view_series}
                     </button>
                     <button class=move || if view.get() == View::Network { "active" } else { "" }
-                            on:click=move |_| set_view.set(View::Network)>
+                            on:click=move |_| go.run(View::Network)>
                         {move || lang.get().t().view_network}
                     </button>
                     <button class=move || if view.get() == View::Methods { "active" } else { "" }
-                            on:click=move |_| set_view.set(View::Methods)>
+                            on:click=move |_| go.run(View::Methods)>
                         {move || lang.get().t().view_methods}
                     </button>
                     <button class=move || if view.get() == View::Limits { "active" } else { "" }
-                            on:click=move |_| set_view.set(View::Limits)>
+                            on:click=move |_| go.run(View::Limits)>
                         {move || lang.get().t().view_limits}
                     </button>
                     <button class=move || if view.get() == View::Links { "active" } else { "" }
-                            on:click=move |_| set_view.set(View::Links)>
+                            on:click=move |_| go.run(View::Links)>
                         {move || lang.get().t().view_links}
                     </button>
                 </div>
