@@ -931,6 +931,7 @@ pub fn RegionMap(
                 let markers = stns.into_iter().map(|s| {
                     let (sx, sy) = geom.screen(s.lat, s.lon);
                     let val = station_value(&ms, s.id, &sub, st);
+                    let mstat = ms.get(&s.id.to_string()).and_then(|m| m.get(sub.as_str())).copied();
                     let label_above = sy > geom.h - 44.0;
                     let class = match (val.is_some(), label_above) {
                         (true, true) => "map-marker label-above",
@@ -945,7 +946,17 @@ pub fn RegionMap(
                         let n = crate::components::chart::fmt_val(v);
                         if unit.is_empty() { n } else { format!("{n} {unit}") }
                     };
-                    let (dot_style, chip, full) = match val {
+                    // The map already paints the selected stat, so the hover tip
+                    // shows the min–max range over the averaging period instead of
+                    // repeating that value.
+                    let range_line = mstat.map(|m| format!(
+                        "{} {} · {} {}",
+                        l.t().leg_min,
+                        crate::components::chart::fmt_val(m.min),
+                        l.t().leg_max,
+                        with_unit(m.max),
+                    ));
+                    let (dot_style, chip) = match val {
                         Some(v) => {
                             let hex = if is_iqa {
                                 iqa_color_hex(v)
@@ -955,21 +966,15 @@ pub fn RegionMap(
                             (
                                 format!("background:{hex};border-color:#fff;"),
                                 crate::components::chart::fmt_val(v),
-                                format!("{} — {}", s.name, with_unit(v)),
                             )
                         }
-                        None => (
-                            String::new(),
-                            String::new(),
-                            format!("{} — {} {}", s.name, sub, l.t().no_data_substance),
-                        ),
+                        None => (String::new(), String::new()),
                     };
                     let chip_show = !chip.is_empty();
                     let name = s.name.clone();
-                    let value_line = match val {
-                        Some(v) => with_unit(v),
-                        None => l.t().no_data_substance.to_string(),
-                    };
+                    let value_line = range_line
+                        .clone()
+                        .unwrap_or_else(|| l.t().no_data_substance.to_string());
 
                     // For the IQA index, name the driving pollutant: the peak-hour
                     // driver under the Maximum stat, else the year-round most-
@@ -984,14 +989,9 @@ pub fn RegionMap(
                     } else {
                         None
                     };
-                    // Fold the driver into the native title tooltip too.
-                    let full = match &driver {
-                        Some(d) => format!("{full}\n{d}"),
-                        None => full,
-                    };
 
                     view! {
-                        <div class=class style=style title=full>
+                        <div class=class style=style>
                             <span class="marker-dot" style=dot_style></span>
                             {chip_show.then(|| view! { <span class="marker-value-chip">{chip.clone()}</span> })}
                             <span class="marker-label">

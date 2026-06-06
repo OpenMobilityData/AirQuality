@@ -210,7 +210,7 @@ pub const EN: T = T {
     range_too_short: "Range too short for interval",
 
     loading_stations: "Loading stations…",
-    click_marker: "Hover a station for its exact value",
+    click_marker: "Hover over a station for more info",
     map_hour_note: "Time-of-day filter uses hourly data (most recent years for long ranges)",
     no_data_substance: "not measured at this station",
     stations_measuring: "stations measuring",
@@ -283,7 +283,7 @@ pub const FR: T = T {
     range_too_short: "Plage trop courte pour l'agrégation",
 
     loading_stations: "Chargement des stations…",
-    click_marker: "Survolez une station pour sa valeur exacte",
+    click_marker: "Survolez une station pour plus d'infos",
     map_hour_note: "Le filtre horaire utilise les données horaires (années récentes pour les longues plages)",
     no_data_substance: "non mesurée à cette station",
     stations_measuring: "stations mesurant",
