@@ -196,6 +196,20 @@ main {
     overflow: hidden;
 }
 
+/* Discrete disclaimer footer under the Map / Time-series views. A fixed-height
+   strip (the map/chart fill the remaining space, so it never overlaps a control);
+   the map re-measures via its ResizeObserver, so no distortion. */
+main > .disclaimer {
+    flex: 0 0 auto;
+    padding: 0.3rem 0.9rem;
+    font-size: 0.66rem;
+    line-height: 1.35;
+    text-align: center;
+    color: var(--text-muted);
+    background: var(--chart-bg);
+    border-top: 1px solid var(--border);
+}
+
 /* Info views (Network / Methodology): no controls apply, so collapse the
    sidebar and let the article span the full width. */
 #app.info-view {

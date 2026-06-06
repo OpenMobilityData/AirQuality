@@ -89,6 +89,8 @@ pub struct T {
     pub data_prefix: &'static str,
     pub generated: &'static str,
     pub latest_year_label: &'static str,
+    /// Discrete footer disclaimer on the Map and Time-series views.
+    pub disclaimer: &'static str,
 
     // Section labels
     pub substance: &'static str,
@@ -171,6 +173,7 @@ pub const EN: T = T {
     data_prefix: "Historical RSQA data",
     generated: "Generated",
     latest_year_label: "Latest available year",
+    disclaimer: "Independent project · not affiliated with the Ville de Montréal · historical data through 2024, not real-time",
 
     substance: "Substance",
     statistic: "Statistic",
@@ -243,6 +246,7 @@ pub const FR: T = T {
     data_prefix: "Données RSQA historiques",
     generated: "Généré",
     latest_year_label: "Dernière année disponible",
+    disclaimer: "Projet indépendant · non affilié à la Ville de Montréal · données historiques jusqu'en 2024, non en temps réel",
 
     substance: "Substance",
     statistic: "Statistique",

@@ -637,6 +637,13 @@ fn App() -> impl IntoView {
                     View::Limits => view! { <InfoPage kind=InfoKind::Limits /> }.into_any(),
                     View::Links => view! { <InfoPage kind=InfoKind::Links /> }.into_any(),
                 }}
+                // Discrete disclaimer footer on the data views only (Map / Series);
+                // the article views carry their own sourcing, so it's omitted there.
+                {move || {
+                    matches!(view.get(), View::Map | View::Series).then(|| view! {
+                        <p class="disclaimer">{move || lang.get().t().disclaimer}</p>
+                    })
+                }}
             </main>
         </div>
     }
