@@ -533,7 +533,10 @@ async fn build_map_png_blob(
     // Heatmap overlay
     let _ = ctx.draw_image_with_html_canvas_element_and_dw_and_dh(&heatmap, 0.0, 0.0, w, h);
 
-    // Markers
+    // Markers. The dot, then (for measuring stations) the value chip that the
+    // on-screen map always shows below it — white text with a black outline,
+    // mirroring `.marker-value-chip`'s text-shadow.
+    ctx.set_text_align("center");
     for s in &stations {
         let (sx, sy) = geom.screen(s.lat, s.lon);
         let val = station_value(&ys, s.id, &substance, stat);
@@ -551,6 +554,17 @@ async fn build_map_png_blob(
                 ctx.set_line_width(2.0);
                 ctx.set_stroke_style_str("#ffffff");
                 ctx.stroke();
+
+                // Value chip below the dot (matches `top:11px` on-screen).
+                let label = crate::components::chart::fmt_val(v);
+                ctx.set_font("600 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace");
+                ctx.set_text_baseline("top");
+                ctx.set_line_join("round");
+                ctx.set_line_width(3.0);
+                ctx.set_stroke_style_str("#000000");
+                let _ = ctx.stroke_text(&label, sx, sy + 11.0);
+                ctx.set_fill_style_str("#ffffff");
+                let _ = ctx.fill_text(&label, sx, sy + 11.0);
             }
             None => {
                 ctx.set_line_width(1.5);
@@ -559,6 +573,9 @@ async fn build_map_png_blob(
             }
         }
     }
+    // Restore defaults the legend/caption text below relies on.
+    ctx.set_text_baseline("alphabetic");
+    ctx.set_text_align("left");
 
     // Colour-bar legend (bottom-left), mirroring the on-screen one.
     let t = lang.t();
