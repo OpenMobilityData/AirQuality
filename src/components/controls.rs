@@ -37,6 +37,10 @@ pub fn Sidebar(
     day_type: ReadSignal<DayType>,
     on_day_type: Callback<DayType>,
 
+    /// Whether the map draws station names.
+    show_names: ReadSignal<bool>,
+    on_show_names: Callback<bool>,
+
     stations: ReadSignal<Vec<Station>>,
     selected_station: ReadSignal<Option<u32>>,
     on_station: Callback<u32>,
@@ -190,6 +194,21 @@ pub fn Sidebar(
                                 </button>
                             }
                         }).collect_view()}
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label class="section-label">{move || lang.get().t().station_names}</label>
+                    <div class="btn-group">
+                        <button
+                            class=move || if show_names.get() { "" } else { "active" }
+                            on:click=move |_| on_show_names.run(false)>
+                            {move || lang.get().t().hide}
+                        </button>
+                        <button
+                            class=move || if show_names.get() { "active" } else { "" }
+                            on:click=move |_| on_show_names.run(true)>
+                            {move || lang.get().t().show}
+                        </button>
                     </div>
                 </div>
             </Show>

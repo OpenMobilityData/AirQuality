@@ -464,6 +464,7 @@ async fn build_map_png_blob(
     stat: Stat,
     lang: Lang,
     range_label: String,
+    show_names: bool,
 ) -> Result<web_sys::Blob, JsValue> {
     let _ = dom; // dominance is summarized in the on-screen markers; not redrawn here
     let document = web_sys::window()
@@ -572,6 +573,19 @@ async fn build_map_png_blob(
                 ctx.stroke();
             }
         }
+
+        // Station name above the dot (matches `.marker-name`'s `bottom:13px`),
+        // only for stations that contribute a value to this map.
+        if show_names && val.is_some() {
+            ctx.set_font("600 10px Inter, system-ui, sans-serif");
+            ctx.set_text_baseline("bottom");
+            ctx.set_line_join("round");
+            ctx.set_line_width(3.0);
+            ctx.set_stroke_style_str("#000000");
+            let _ = ctx.stroke_text(&s.name, sx, sy - 13.0);
+            ctx.set_fill_style_str("#ffffff");
+            let _ = ctx.fill_text(&s.name, sx, sy - 13.0);
+        }
     }
     // Restore defaults the legend/caption text below relies on.
     ctx.set_text_baseline("alphabetic");
@@ -675,6 +689,8 @@ pub fn RegionMap(
     hour_from: ReadSignal<u8>,
     hour_to: ReadSignal<u8>,
     day_type: ReadSignal<DayType>,
+    /// Whether to draw each station's name on the map (and in the export).
+    show_names: ReadSignal<bool>,
 ) -> impl IntoView {
     let lang = use_context::<ReadSignal<Lang>>().expect("Lang context not provided");
 
@@ -824,15 +840,15 @@ pub fn RegionMap(
         let heatmap = canvas_ref.get();
         let (w, h) = size.get();
         (container, heatmap, w, h, stations.get(), year_stats(), year_dom(),
-         substance.get(), stat.get(), lang.get(), year_label())
+         substance.get(), stat.get(), lang.get(), year_label(), show_names.get())
     };
 
     let on_download = move |_| {
-        let (Some(cont), Some(hc), w, h, stns, ys, dom, sub, st, l, yl) = snapshot() else { return };
+        let (Some(cont), Some(hc), w, h, stns, ys, dom, sub, st, l, yl, sn) = snapshot() else { return };
         if w < 1.0 { return; }
         let filename = format!("airquality-map-{}.png", chrono::Local::now().format("%Y-%m-%d_%H%M%S"));
         crate::components::export::run_download(filename, move || {
-            Box::pin(build_map_png_blob(cont, hc, w, h, stns, ys, dom, sub, st, l, yl))
+            Box::pin(build_map_png_blob(cont, hc, w, h, stns, ys, dom, sub, st, l, yl, sn))
         });
     };
 
@@ -845,13 +861,13 @@ pub fn RegionMap(
             .set_timeout_with_callback_and_timeout_and_arguments_0(cb.as_ref().unchecked_ref(), 1500);
     });
     let on_copy = move |_| {
-        let (Some(cont), Some(hc), w, h, stns, ys, dom, sub, st, l, yl) = snapshot() else { return };
+        let (Some(cont), Some(hc), w, h, stns, ys, dom, sub, st, l, yl, sn) = snapshot() else { return };
         if w < 1.0 { return; }
         crate::components::export::run_copy(
             move || {
                 Box::pin(build_map_png_blob(
                     cont.clone(), hc.clone(), w, h, stns.clone(), ys.clone(), dom.clone(),
-                    sub.clone(), st, l, yl.clone(),
+                    sub.clone(), st, l, yl.clone(), sn,
                 ))
             },
             on_copy_success,
@@ -909,6 +925,7 @@ pub fn RegionMap(
                 let is_iqa = sub == IQA_KEY;
                 let st = stat.get();
                 let l = lang.get();
+                let names_on = show_names.get();
                 let Some(geom) = compute_geom(&stns, w, h) else {
                     return view! { <div class="map-hint">{l.t().loading_stations}</div> }.into_any();
                 };
@@ -1007,9 +1024,15 @@ pub fn RegionMap(
                         None
                     };
 
+                    // Only name stations that actually contribute a value to this map.
+                    let name_chip = (names_on && val.is_some()).then(|| view! {
+                        <span class="marker-name">{s.name.clone()}</span>
+                    });
+
                     view! {
                         <div class=class style=style>
                             <span class="marker-dot" style=dot_style></span>
+                            {name_chip}
                             {chip_show.then(|| view! { <span class="marker-value-chip">{chip.clone()}</span> })}
                             <span class="marker-label">
                                 {name}<br/><span class="marker-value">{value_line}</span>

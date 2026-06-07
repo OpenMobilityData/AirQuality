@@ -100,6 +100,8 @@ fn App() -> impl IntoView {
     let (hour_to, set_hour_to) = signal(23u8);
     // Map day-type filter (all days / weekdays / weekends).
     let (day_type, set_day_type) = signal(DayType::All);
+    // Whether the map draws station names (off by default).
+    let (show_names, set_show_names) = signal(false);
     let (selected_station, set_selected_station) = signal::<Option<u32>>(None);
     let (interval, set_interval) = signal(Interval::Month);
     // Averaging profile (None = ordinary time series).
@@ -569,6 +571,7 @@ fn App() -> impl IntoView {
         set_hour_to.set(t);
     });
     let on_day_type = Callback::new(move |d: DayType| set_day_type.set(d));
+    let on_show_names = Callback::new(move |b: bool| set_show_names.set(b));
     let on_station = Callback::new(move |id: u32| set_selected_station.set(Some(id)));
     let on_interval = Callback::new(move |iv: Interval| set_interval.set(iv));
     // Toggle a profile: clicking the active one turns it back off.
@@ -654,6 +657,8 @@ fn App() -> impl IntoView {
                 on_hour_range=on_hour_range
                 day_type=day_type
                 on_day_type=on_day_type
+                show_names=show_names
+                on_show_names=on_show_names
                 stations=stations
                 selected_station=selected_station
                 on_station=on_station
@@ -684,6 +689,7 @@ fn App() -> impl IntoView {
                             hour_from=hour_from
                             hour_to=hour_to
                             day_type=day_type
+                            show_names=show_names
                         />
                     }.into_any(),
                     View::Series => view! {
