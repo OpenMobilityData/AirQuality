@@ -3,9 +3,9 @@
     <h1>Further reading</h1>
     <p>
       A short, curated set of links for going deeper: the City's live air-quality map for
-      current conditions, the health case for caring about traffic-related air pollution, the
-      open dataset this site is built on, and the source code for the site itself. More may be
-      added over time.
+      current conditions, the health case for caring about traffic-related air pollution,
+      research on how finely air pollution varies across the city, the open dataset this site
+      is built on, and the source code for the site itself. More may be added over time.
     </p>
   </header>
 
@@ -56,6 +56,38 @@
         road-traffic pollutants — NO₂ in particular — relates to childhood asthma in Québec,
         using birth-cohort data. The most in-depth, research-level treatment of
         the traffic-and-health link in this list. In French, with an English abstract.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Spatial variability</h2>
+    <ul>
+      <li>
+        <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3888565/" target="_blank" rel="noopener noreferrer">Evaluating multipollutant exposure and urban air quality: nitrogen dioxide as a proxy pollutant</a>
+        — A Montréal mobile-laboratory study (Environmental Health Perspectives, 2014) that
+        measured 23 pollutants simultaneously across the city over three seasons. It found that
+        nitrogen-oxide species — including the NO₂ this site maps — are the best single proxy for
+        the broader traffic-pollution mixture, while cautioning that no one pollutant captures it
+        perfectly. Useful context for why NO₂ is an informative, if imperfect, lens on air
+        quality. In English.
+      </li>
+      <li>
+        <a href="https://www.sciencedirect.com/science/article/pii/S001393511530178X" target="_blank" rel="noopener noreferrer">A land use regression model for ambient ultrafine particles in Montreal, Canada</a>
+        — A peer-reviewed study (Environmental Research, 2016) that maps ultrafine particles
+        across Montréal from a mobile-monitoring campaign, comparing a classical land-use
+        regression with a machine-learning approach. It shows how sharply traffic-related
+        pollution varies from street to street — far finer than a sparse network of fixed
+        stations can resolve, which is exactly why the interpolated surface on this site's map is
+        illustrative rather than exact. In English.
+      </li>
+      <li>
+        <a href="https://www.sciencedirect.com/science/article/pii/S0160412023003793" target="_blank" rel="noopener noreferrer">Predicting spatial variations in annual average outdoor ultrafine particle concentrations in Montreal and Toronto</a>
+        — A more recent study (Environment International, 2023) that integrates land-use
+        regression with deep-learning models to reconstruct fine-scale, annual-average
+        ultrafine-particle concentrations across Montréal and Toronto. A state-of-the-art
+        illustration of how much modelling it takes to recover the spatial detail that a
+        fixed-station network misses. In English.
       </li>
     </ul>
   </section>
