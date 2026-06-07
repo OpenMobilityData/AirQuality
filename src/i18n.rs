@@ -91,6 +91,8 @@ pub struct T {
     pub latest_year_label: &'static str,
     /// Discrete footer disclaimer on the Map and Time-series views.
     pub disclaimer: &'static str,
+    /// Extra footer clause on the Map view: the between-station surface is interpolated.
+    pub interp_note: &'static str,
 
     // Section labels
     pub substance: &'static str,
@@ -174,6 +176,7 @@ pub const EN: T = T {
     generated: "Generated",
     latest_year_label: "Latest available year",
     disclaimer: "Independent project · not affiliated with the Ville de Montréal · historical data through 2024, not real-time",
+    interp_note: "shaded surface between stations is interpolated — illustrative, not exact",
 
     substance: "Substance",
     statistic: "Statistic",
@@ -247,6 +250,7 @@ pub const FR: T = T {
     generated: "Généré",
     latest_year_label: "Dernière année disponible",
     disclaimer: "Projet indépendant · non affilié à la Ville de Montréal · données historiques jusqu'en 2024, non en temps réel",
+    interp_note: "la surface ombrée entre les stations est interpolée — illustrative, non exacte",
 
     substance: "Substance",
     statistic: "Statistique",

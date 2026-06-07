@@ -699,8 +699,17 @@ fn App() -> impl IntoView {
                 // Discrete disclaimer footer on the data views only (Map / Series);
                 // the article views carry their own sourcing, so it's omitted there.
                 {move || {
-                    matches!(view.get(), View::Map | View::Series).then(|| view! {
-                        <p class="disclaimer">{move || lang.get().t().disclaimer}</p>
+                    let v = view.get();
+                    matches!(v, View::Map | View::Series).then(|| {
+                        let t = lang.get().t();
+                        // The interpolated heatmap is Map-only, so note it there.
+                        let interp = (v == View::Map).then_some(t.interp_note);
+                        view! {
+                            <p class="disclaimer">
+                                {t.disclaimer}
+                                {interp.map(|n| view! { " · "{n} })}
+                            </p>
+                        }
                     })
                 }}
             </main>
