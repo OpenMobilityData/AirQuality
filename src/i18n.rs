@@ -195,7 +195,7 @@ pub const EN: T = T {
     generated: "Generated",
     latest_year_label: "Latest available year",
     disclaimer: "Independent project · not affiliated with the Ville de Montréal · historical data through 2024, not real-time",
-    interp_note: "shaded surface between stations is interpolated — illustrative, not exact",
+    interp_note: "the interpolated surface between stations is illustrative, not exact",
 
     substance: "Substance",
     statistic: "Statistic",
@@ -283,7 +283,7 @@ pub const FR: T = T {
     generated: "Généré",
     latest_year_label: "Dernière année disponible",
     disclaimer: "Projet indépendant · non affilié à la Ville de Montréal · données historiques jusqu'en 2024, non en temps réel",
-    interp_note: "la surface ombrée entre les stations est interpolée — illustrative, non exacte",
+    interp_note: "la surface interpolée entre les stations est illustrative, non exacte",
 
     substance: "Substance",
     statistic: "Statistique",
