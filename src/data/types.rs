@@ -30,12 +30,16 @@ pub struct Reading {
 /// over the selected date range (and optional hour/day-type filter) from the
 /// daily or hourly tier. `mean` is sample-weighted; `min`/`max` are extremes;
 /// `median` is exact (hourly path) or median-of-daily-means (daily path).
+/// `mean_daily_max` is the unweighted average of each in-range day's maximum.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MapStat {
     pub mean: f64,
     pub median: f64,
     pub min: f64,
     pub max: f64,
+    /// Mean of the per-day maxima over the selected range (each day's peak,
+    /// then averaged across days). Exact on both the daily and hourly paths.
+    pub mean_daily_max: f64,
     /// Number of samples behind the summary (hourly readings, or days on the
     /// daily path). Retained for tooltips/QA even though the map doesn't render it.
     #[allow(dead_code)]
@@ -82,11 +86,13 @@ pub enum Stat {
     Median,
     Max,
     Min,
+    /// Mean of each day's maximum over the selected range.
+    MeanDailyMax,
 }
 
 impl Stat {
     pub fn all() -> &'static [Stat] {
-        &[Stat::Mean, Stat::Median, Stat::Max, Stat::Min]
+        &[Stat::Mean, Stat::Median, Stat::Max, Stat::Min, Stat::MeanDailyMax]
     }
     pub fn label(self, lang: Lang) -> &'static str {
         let t = lang.t();
@@ -95,6 +101,7 @@ impl Stat {
             Stat::Median => t.stat_median,
             Stat::Max => t.stat_max,
             Stat::Min => t.stat_min,
+            Stat::MeanDailyMax => t.stat_mean_daily_max,
         }
     }
     /// Pull this statistic out of a `MapStat`.
@@ -104,6 +111,7 @@ impl Stat {
             Stat::Median => s.median,
             Stat::Max => s.max,
             Stat::Min => s.min,
+            Stat::MeanDailyMax => s.mean_daily_max,
         }
     }
 }

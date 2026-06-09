@@ -119,6 +119,7 @@ pub struct T {
     pub stat_median: &'static str,
     pub stat_max: &'static str,
     pub stat_min: &'static str,
+    pub stat_mean_daily_max: &'static str,
 
     // Intervals
     pub hour: &'static str,
@@ -203,6 +204,7 @@ pub const EN: T = T {
     stat_median: "Median",
     stat_max: "Maximum",
     stat_min: "Minimum",
+    stat_mean_daily_max: "Mean daily max",
 
     hour: "Hour",
     day: "Day",
@@ -280,6 +282,7 @@ pub const FR: T = T {
     stat_median: "Médiane",
     stat_max: "Maximum",
     stat_min: "Minimum",
+    stat_mean_daily_max: "Moy. max. quotidiens",
 
     hour: "Heure",
     day: "Jour",

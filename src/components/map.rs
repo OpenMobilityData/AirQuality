@@ -229,12 +229,13 @@ fn aggregate_daily(
         let Some(base) = ds.base_date() else { continue };
         let mut sub_map: BTreeMap<String, MapStat> = BTreeMap::new();
         for (sub, cells) in &ds.substances {
-            // (Σ mean·n, min, max, Σ n, [daily means])
+            // (Σ mean·n, min, max, Σ n, [daily means], Σ daily-max)
             let mut sum_mean_n = 0.0_f64;
             let mut mn = f64::INFINITY;
             let mut mx = f64::NEG_INFINITY;
             let mut n: u64 = 0;
             let mut means: Vec<f64> = Vec::new();
+            let mut sum_dmax = 0.0_f64;
             for (idx, mean, cmin, cmax, cn) in cells {
                 let date = base + Duration::days(*idx);
                 if date < from || date > to {
@@ -248,13 +249,23 @@ fn aggregate_daily(
                 mx = mx.max(*cmax);
                 n += *cn as u64;
                 means.push(*mean);
+                sum_dmax += *cmax;
             }
             if n == 0 {
                 continue;
             }
+            // One cell per in-range day, so `means.len()` is the day count.
+            let mean_daily_max = sum_dmax / means.len() as f64;
             sub_map.insert(
                 sub.clone(),
-                MapStat { mean: sum_mean_n / n as f64, median: median_of(means), min: mn, max: mx, n: n as u32 },
+                MapStat {
+                    mean: sum_mean_n / n as f64,
+                    median: median_of(means),
+                    min: mn,
+                    max: mx,
+                    mean_daily_max,
+                    n: n as u32,
+                },
             );
         }
         if !sub_map.is_empty() {
@@ -279,6 +290,8 @@ fn aggregate_hourly(
 ) -> MapSlice {
     // (sid, sub) -> all matching hourly values, for exact stats.
     let mut acc: BTreeMap<(u32, String), Vec<f64>> = BTreeMap::new();
+    // (sid, sub) -> per local-day maximum, for the mean-of-daily-maxima stat.
+    let mut day_max: BTreeMap<(u32, String), BTreeMap<NaiveDate, f64>> = BTreeMap::new();
     for ((sid, _year), sf) in hourly {
         for sub in sf.substances.keys() {
             for r in sf.readings(sub) {
@@ -295,6 +308,12 @@ fn aggregate_hourly(
                     continue;
                 }
                 acc.entry((*sid, sub.clone())).or_default().push(r.value);
+                day_max
+                    .entry((*sid, sub.clone()))
+                    .or_default()
+                    .entry(d)
+                    .and_modify(|m| *m = m.max(r.value))
+                    .or_insert(r.value);
             }
         }
     }
@@ -307,9 +326,14 @@ fn aggregate_hourly(
         let sum: f64 = vals.iter().sum();
         let mn = vals.iter().cloned().fold(f64::INFINITY, f64::min);
         let mx = vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let mean_daily_max = day_max
+            .get(&(sid, sub.clone()))
+            .filter(|days| !days.is_empty())
+            .map(|days| days.values().sum::<f64>() / days.len() as f64)
+            .unwrap_or(mx);
         out.entry(sid.to_string()).or_default().insert(
             sub,
-            MapStat { mean: sum / n as f64, median: median_of(vals), min: mn, max: mx, n },
+            MapStat { mean: sum / n as f64, median: median_of(vals), min: mn, max: mx, mean_daily_max, n },
         );
     }
     out
