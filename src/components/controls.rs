@@ -103,14 +103,20 @@ pub fn Sidebar(
                     <div class="date-range">
                         <input type="date"
                                prop:value=move || map_date_from.get().format("%Y-%m-%d").to_string()
-                               on:input=move |e| {
+                               // Commit on `change` (field finalized/blurred), not `input`
+                               // (every keystroke) — a half-typed date like 2024-09-3 would
+                               // momentarily parse to a valid 2024-09-03 and clobber the range.
+                               on:change=move |e| {
                                    if let Ok(d) = NaiveDate::parse_from_str(&event_target_value(&e), "%Y-%m-%d") {
                                        on_map_date_from.run(d);
                                    }
                                }/>
                         <input type="date"
                                prop:value=move || map_date_to.get().format("%Y-%m-%d").to_string()
-                               on:input=move |e| {
+                               // Commit on `change` (field finalized/blurred), not `input`
+                               // (every keystroke) — a half-typed date like 2024-09-3 would
+                               // momentarily parse to a valid 2024-09-03 and clobber the range.
+                               on:change=move |e| {
                                    if let Ok(d) = NaiveDate::parse_from_str(&event_target_value(&e), "%Y-%m-%d") {
                                        on_map_date_to.run(d);
                                    }
@@ -313,14 +319,20 @@ pub fn Sidebar(
                     <div class="date-range">
                         <input type="date"
                                prop:value=move || date_from.get().format("%Y-%m-%d").to_string()
-                               on:input=move |e| {
+                               // Commit on `change` (field finalized/blurred), not `input`
+                               // (every keystroke) — a half-typed date like 2024-09-3 would
+                               // momentarily parse to a valid 2024-09-03 and clobber the range.
+                               on:change=move |e| {
                                    if let Ok(d) = NaiveDate::parse_from_str(&event_target_value(&e), "%Y-%m-%d") {
                                        on_date_from.run(d);
                                    }
                                }/>
                         <input type="date"
                                prop:value=move || date_to.get().format("%Y-%m-%d").to_string()
-                               on:input=move |e| {
+                               // Commit on `change` (field finalized/blurred), not `input`
+                               // (every keystroke) — a half-typed date like 2024-09-3 would
+                               // momentarily parse to a valid 2024-09-03 and clobber the range.
+                               on:change=move |e| {
                                    if let Ok(d) = NaiveDate::parse_from_str(&event_target_value(&e), "%Y-%m-%d") {
                                        on_date_to.run(d);
                                    }
