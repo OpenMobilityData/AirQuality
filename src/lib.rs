@@ -634,10 +634,6 @@ fn App() -> impl IntoView {
                             on:click=move |_| go.run(View::Network)>
                         {move || lang.get().t().view_network}
                     </button>
-                    <button class=move || if view.get() == View::Ufp { "active" } else { "" }
-                            on:click=move |_| go.run(View::Ufp)>
-                        {move || lang.get().t().view_ufp}
-                    </button>
                     <button class=move || if view.get() == View::Methods { "active" } else { "" }
                             on:click=move |_| go.run(View::Methods)>
                         {move || lang.get().t().view_methods}
@@ -645,6 +641,13 @@ fn App() -> impl IntoView {
                     <button class=move || if view.get() == View::Limits { "active" } else { "" }
                             on:click=move |_| go.run(View::Limits)>
                         {move || lang.get().t().view_limits}
+                    </button>
+                    // UFP Model sits after Limits: Map→Limits all concern the
+                    // city's monitoring program for regulated pollutants, while
+                    // UFPs are modelled and not currently regulated.
+                    <button class=move || if view.get() == View::Ufp { "active" } else { "" }
+                            on:click=move |_| go.run(View::Ufp)>
+                        {move || lang.get().t().view_ufp}
                     </button>
                     <button class=move || if view.get() == View::Links { "active" } else { "" }
                             on:click=move |_| go.run(View::Links)>
