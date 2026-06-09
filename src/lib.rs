@@ -630,13 +630,13 @@ fn App() -> impl IntoView {
                             on:click=move |_| go.run(View::Series)>
                         {move || lang.get().t().view_series}
                     </button>
-                    <button class=move || if view.get() == View::Ufp { "active" } else { "" }
-                            on:click=move |_| go.run(View::Ufp)>
-                        {move || lang.get().t().view_ufp}
-                    </button>
                     <button class=move || if view.get() == View::Network { "active" } else { "" }
                             on:click=move |_| go.run(View::Network)>
                         {move || lang.get().t().view_network}
+                    </button>
+                    <button class=move || if view.get() == View::Ufp { "active" } else { "" }
+                            on:click=move |_| go.run(View::Ufp)>
+                        {move || lang.get().t().view_ufp}
                     </button>
                     <button class=move || if view.get() == View::Methods { "active" } else { "" }
                             on:click=move |_| go.run(View::Methods)>
