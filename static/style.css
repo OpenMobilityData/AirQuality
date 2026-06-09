@@ -584,6 +584,49 @@ main > .disclaimer {
     color: var(--text-muted);
 }
 
+/* ── UFP 3D surface view ── */
+.ufp-page {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.ufp-container {
+    flex: 1;
+    min-height: 0;
+    background: var(--chart-bg);
+    position: relative;
+    overflow: hidden;
+}
+/* The canvas bitmap is sized in device pixels by the renderer; CSS stretches
+   it to the container. touch-action:none lets pointermove drive the turntable
+   on touch screens instead of scrolling the page. */
+.ufp-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    cursor: grab;
+}
+.ufp-canvas:active { cursor: grabbing; }
+.map-hint.ufp-title-line { color: var(--text); font-size: 12px; }
+.map-hint.ufp-hint-line { top: 26px; }
+/* Attribution footer: same strip as the Map/Series disclaimer, but local to
+   the UFP page (it carries the paper citation + modelled-data caveat). */
+.ufp-attribution {
+    flex: 0 0 auto;
+    padding: 0.35rem 0.9rem;
+    font-size: 0.66rem;
+    line-height: 1.4;
+    text-align: center;
+    color: var(--text-muted);
+    background: var(--chart-bg);
+    border-top: 1px solid var(--border);
+}
+.ufp-attribution a { color: #6db3ff; text-decoration: none; }
+.ufp-attribution a:hover { text-decoration: underline; }
+
 /* Loading / empty states */
 .placeholder {
     display: flex;

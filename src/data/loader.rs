@@ -65,6 +65,37 @@ pub async fn fetch_meta() -> Result<Meta, String> {
     fetch_json("data/meta.json").await
 }
 
+/// On-disk shape of `ufp-surface.json` — the modelled ultrafine-particle grid
+/// extracted from the Weichenthal et al. (2023) combined-model output by
+/// `scripts/extract-ufp-surface.py`. Row-major `ny × nx` values (pt/cm³, `None`
+/// = outside the modelled area) over a uniform km grid anchored at `(x0, y0)`
+/// with steps `(dx, dy)`; x runs west→east, y south→north. `cmin`/`cmax` are
+/// the original figure's colour clamp, `zmin`/`zmax` the true value extremes.
+#[derive(Debug, Clone, Deserialize)]
+pub struct UfpSurface {
+    pub nx: usize,
+    pub ny: usize,
+    #[allow(dead_code)]
+    pub x0: f64,
+    pub dx: f64,
+    #[allow(dead_code)]
+    pub y0: f64,
+    pub dy: f64,
+    pub cmin: f64,
+    pub cmax: f64,
+    pub zmin: f64,
+    pub zmax: f64,
+    pub z: Vec<Option<f32>>,
+}
+
+pub async fn fetch_ufp_surface() -> Result<UfpSurface, String> {
+    let s: UfpSurface = fetch_json("data/ufp-surface.json").await?;
+    if s.z.len() != s.nx * s.ny || s.nx < 2 || s.ny < 2 {
+        return Err("ufp-surface.json: inconsistent grid shape".into());
+    }
+    Ok(s)
+}
+
 /// On-disk shape of `series/station-<id>-<year>.json` — hourly values for one
 /// station-year, sparse `[hour_index, value]` pairs anchored at `start_utc`.
 /// Loaded on demand only for the Hour interval.

@@ -80,6 +80,7 @@ pub struct T {
     pub subtitle: &'static str,
     pub view_map: &'static str,
     pub view_series: &'static str,
+    pub view_ufp: &'static str,
     pub view_network: &'static str,
     pub view_methods: &'static str,
     pub view_limits: &'static str,
@@ -153,6 +154,19 @@ pub struct T {
     pub iqa_poor: &'static str,
     pub iqa_higher_worse: &'static str,
 
+    // UFP surface view
+    pub ufp_title: &'static str,
+    pub ufp_loading: &'static str,
+    pub ufp_hint: &'static str,
+    /// Colour-bar title, e.g. "UFP (particles/cm³)".
+    pub ufp_legend_title: &'static str,
+    /// Note under the colour bar explaining the reference grid spacing.
+    pub ufp_grid_note: &'static str,
+    /// Attribution sentence fragments around the linked paper title.
+    pub ufp_source_label: &'static str,
+    pub ufp_data_credit: &'static str,
+    pub ufp_modelled_note: &'static str,
+
     // Placeholders
     pub select_station_desktop: &'static str,
     pub select_station_mobile: &'static str,
@@ -170,6 +184,7 @@ pub const EN: T = T {
     subtitle: "Historical air-quality visualizer",
     view_map: "Map",
     view_series: "Time series",
+    view_ufp: "UFP Model",
     view_network: "Sources",
     view_methods: "Methodology",
     view_limits: "Limits",
@@ -233,6 +248,15 @@ pub const EN: T = T {
     iqa_poor: "Poor",
     iqa_higher_worse: "Higher = worse air quality",
 
+    ufp_title: "Modelled ultrafine particles (UFP) — Montréal 2020 · height = concentration",
+    ufp_loading: "Loading surface…",
+    ufp_hint: "Drag to rotate · scroll or pinch to zoom · double-click to reset",
+    ufp_legend_title: "UFP (particles/cm³)",
+    ufp_grid_note: "Ground grid: 5 km",
+    ufp_source_label: "Source:",
+    ufp_data_credit: "(Environment International, 2023). Raw model data kindly provided by Scott Weichenthal, the study's corresponding author.",
+    ufp_modelled_note: "The values shown are modelled estimates derived from an experimental measurement technique — not direct measurements at this resolution.",
+
     select_station_desktop: "Select a station and substance from the sidebar to view its time series",
     select_station_mobile: "Select a station and substance from the Filters menu to view its time series",
 
@@ -248,6 +272,7 @@ pub const FR: T = T {
     subtitle: "Visualiseur historique de la qualité de l'air",
     view_map: "Carte",
     view_series: "Série temporelle",
+    view_ufp: "Modèle PUF",
     view_network: "Sources",
     view_methods: "Méthodologie",
     view_limits: "Limites",
@@ -310,6 +335,15 @@ pub const FR: T = T {
     iqa_acceptable: "Acceptable",
     iqa_poor: "Mauvais",
     iqa_higher_worse: "Valeur élevée = air plus pollué",
+
+    ufp_title: "Particules ultrafines (PUF) modélisées — Montréal 2020 · hauteur = concentration",
+    ufp_loading: "Chargement de la surface…",
+    ufp_hint: "Glissez pour pivoter · molette ou pincement pour zoomer · double-clic pour réinitialiser",
+    ufp_legend_title: "PUF (particules/cm³)",
+    ufp_grid_note: "Grille au sol : 5 km",
+    ufp_source_label: "Source :",
+    ufp_data_credit: "(Environment International, 2023). Données brutes du modèle aimablement fournies par Scott Weichenthal, auteur correspondant de l'étude.",
+    ufp_modelled_note: "Les valeurs affichées sont des estimations modélisées, dérivées d'une technique de mesure expérimentale — et non des mesures directes à cette résolution.",
 
     select_station_desktop: "Sélectionnez une station et une substance dans la barre latérale pour afficher la série temporelle",
     select_station_mobile: "Sélectionnez une station et une substance dans le menu Filtres pour afficher la série temporelle",

@@ -176,6 +176,8 @@ impl Profile {
 pub enum View {
     Map,
     Series,
+    /// Interactive 3D surface of modelled ultrafine-particle concentrations.
+    Ufp,
     /// Background on the RSQA monitoring network.
     Network,
     /// Data sources and processing methodology.
@@ -187,9 +189,10 @@ pub enum View {
 }
 
 impl View {
-    /// True for the read-only article views, which hide the filter sidebar.
+    /// True for the views with no sidebar controls (the read-only articles and
+    /// the self-contained UFP surface), which collapse the filter sidebar.
     pub fn is_info(self) -> bool {
-        matches!(self, View::Network | View::Methods | View::Limits | View::Links)
+        matches!(self, View::Ufp | View::Network | View::Methods | View::Limits | View::Links)
     }
 
     /// Stable URL slug for `?view=<slug>` deep links. Deliberately decoupled
@@ -199,6 +202,7 @@ impl View {
         match self {
             View::Map => "map",
             View::Series => "series",
+            View::Ufp => "ufp",
             View::Network => "sources",
             View::Methods => "methodology",
             View::Limits => "limits",
@@ -211,6 +215,7 @@ impl View {
         Some(match s {
             "map" => View::Map,
             "series" => View::Series,
+            "ufp" => View::Ufp,
             "sources" => View::Network,
             "methodology" => View::Methods,
             "limits" => View::Limits,

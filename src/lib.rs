@@ -14,7 +14,8 @@ use components::chart::{Chart, Series};
 use components::controls::Sidebar;
 use components::info::{InfoKind, InfoPage};
 use components::map::RegionMap;
-use data::loader::{self, DailySeries, IqaDominanceMap, Meta, SeriesFile};
+use components::ufp::UfpView;
+use data::loader::{self, DailySeries, IqaDominanceMap, Meta, SeriesFile, UfpSurface};
 use data::pollutants;
 use data::types::{DayType, Interval, Profile, Stat, Station, View};
 use i18n::Lang;
@@ -84,6 +85,8 @@ fn App() -> impl IntoView {
     let (daily_cache, set_daily_cache) = signal::<BTreeMap<u32, DailySeries>>(BTreeMap::new());
     let (hourly_cache, set_hourly_cache) =
         signal::<BTreeMap<(u32, i32), SeriesFile>>(BTreeMap::new());
+    // Modelled UFP surface grid, fetched lazily the first time its view opens.
+    let (ufp_surface, set_ufp_surface) = signal::<Option<UfpSurface>>(None);
 
     // ── UI state ──
     // Open on the view named by `?view=<slug>` (shareable deep link), else Map.
@@ -119,6 +122,7 @@ fn App() -> impl IntoView {
         let label = match view.get() {
             View::Map => t.view_map,
             View::Series => t.view_series,
+            View::Ufp => t.view_ufp,
             View::Network => t.view_network,
             View::Methods => t.view_methods,
             View::Limits => t.view_limits,
@@ -213,7 +217,8 @@ fn App() -> impl IntoView {
     let substance_options = Memo::new(move |_| {
         let subs = active_subs.get();
         match view.get() {
-            View::Map | View::Network | View::Methods | View::Limits | View::Links => subs,
+            View::Map | View::Ufp | View::Network | View::Methods | View::Limits
+            | View::Links => subs,
             View::Series => match selected_station.get() {
                 Some(sid) => stations
                     .get()
@@ -292,6 +297,19 @@ fn App() -> impl IntoView {
                 }
             });
         }
+    });
+
+    // ── UFP view: fetch the modelled surface grid once, on first open ──
+    Effect::new(move |_| {
+        if view.get() != View::Ufp || ufp_surface.with_untracked(|s| s.is_some()) {
+            return;
+        }
+        spawn_local(async move {
+            match loader::fetch_ufp_surface().await {
+                Ok(s) => set_ufp_surface.set(Some(s)),
+                Err(e) => web_sys::console::error_1(&format!("ufp surface: {e}").into()),
+            }
+        });
     });
 
     // ── Map: fetch the daily tier for every station when the Map view is open ──
@@ -612,6 +630,10 @@ fn App() -> impl IntoView {
                             on:click=move |_| go.run(View::Series)>
                         {move || lang.get().t().view_series}
                     </button>
+                    <button class=move || if view.get() == View::Ufp { "active" } else { "" }
+                            on:click=move |_| go.run(View::Ufp)>
+                        {move || lang.get().t().view_ufp}
+                    </button>
                     <button class=move || if view.get() == View::Network { "active" } else { "" }
                             on:click=move |_| go.run(View::Network)>
                         {move || lang.get().t().view_network}
@@ -697,6 +719,7 @@ fn App() -> impl IntoView {
                                thresholds=iqa_thresholds caption=chart_caption
                                profile=profile.into() x_range=x_range />
                     }.into_any(),
+                    View::Ufp => view! { <UfpView surface=ufp_surface /> }.into_any(),
                     View::Network => view! { <InfoPage kind=InfoKind::Network /> }.into_any(),
                     View::Methods => view! { <InfoPage kind=InfoKind::Methods /> }.into_any(),
                     View::Limits => view! { <InfoPage kind=InfoKind::Limits /> }.into_any(),
