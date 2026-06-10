@@ -37,7 +37,10 @@ only static files.
    A **Comparison** control pins the current trace as a frozen snapshot (up to
    four) so the controls can be reconfigured into further live traces overlaid
    on the same axes — e.g. the 1990 vs. 2002 vs. 2024 weekday NO diurnal cycle
-   at a traffic site.
+   at a traffic site. Same-substance comparisons share the absolute axis; a
+   mixed-substance comparison switches to a normalized axis (each trace scaled
+   to % of its own maximum, with "100% = …" noted per legend row), since
+   pollutants' dynamic ranges differ wildly even when their units match.
 3. **Stations** — a bilingual long-form explainer on the RSQA monitoring network
    (coverage, pollutants, history, data caveats) with cited sources.
 4. **Methodology** — this site's data sources (with attribution) and the exact

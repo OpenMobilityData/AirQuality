@@ -180,8 +180,10 @@ pub struct T {
     pub unpin_traces: &'static str,
     /// Hint under the pin button while nothing is pinned.
     pub pin_hint: &'static str,
-    /// Caution shown when the pinned and live traces have different units.
-    pub pin_units_warn: &'static str,
+    /// Y-axis title and caption note when the comparison mixes substances and
+    /// each trace is scaled to % of its own maximum.
+    pub norm_axis: &'static str,
+    pub norm_note: &'static str,
 
     // Chart coverage chip (shown when the plotted data doesn't fully cover
     // the query range, or has long internal gaps).
@@ -287,7 +289,8 @@ pub const EN: T = T {
     unpin_trace: "Unpin trace",
     unpin_traces: "Unpin traces",
     pin_hint: "Pin the trace, then change the controls to overlay a second one",
-    pin_units_warn: "pinned trace uses different units (shared axis)",
+    norm_axis: "% of trace maximum",
+    norm_note: "mixed substances — each trace scaled to % of its own maximum",
 
     cov_query: "Requested range",
     cov_begins: "Data begins",
@@ -389,7 +392,8 @@ pub const FR: T = T {
     unpin_trace: "Désépingler la courbe",
     unpin_traces: "Désépingler les courbes",
     pin_hint: "Épinglez la courbe, puis modifiez les réglages pour en superposer une seconde",
-    pin_units_warn: "la courbe épinglée utilise d'autres unités (axe partagé)",
+    norm_axis: "% du maximum de la courbe",
+    norm_note: "substances différentes — chaque courbe est ramenée à % de son maximum",
 
     cov_query: "Plage demandée",
     cov_begins: "Données à partir du",

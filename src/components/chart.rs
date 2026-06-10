@@ -318,9 +318,9 @@ pub fn Chart(
     /// (late start / early end / long gaps); shown as a hoverable info chip
     /// beside the caption. `None` hides the chip.
     coverage: Signal<Option<String>>,
-    /// True when a pinned comparison trace uses different units than the live
-    /// one — both share the y-axis, so a caution is shown beside the caption.
-    unit_warn: Signal<bool>,
+    /// True when the comparison mixes substances, so every trace is scaled to
+    /// % of its own maximum — an explanatory note is shown beside the caption.
+    norm_note: Signal<bool>,
     /// Active averaging profile (None = ordinary time series) — switches the
     /// x-axis to a 24-hour (diurnal) or 7-day (weekly) synthetic base.
     profile: Signal<Option<Profile>>,
@@ -626,8 +626,8 @@ pub fn Chart(
                 {move || coverage.get().map(|tip| view! {
                     <span class="info-chip" title=tip>"i"</span>
                 })}
-                {move || unit_warn.get().then(|| view! {
-                    <span class="unit-warn">{move || lang.get().t().pin_units_warn}</span>
+                {move || norm_note.get().then(|| view! {
+                    <span class="axis-note">{move || lang.get().t().norm_note}</span>
                 })}
             </div>
 

@@ -184,9 +184,9 @@ button:disabled:hover { background: var(--accent); border-color: var(--border); 
 }
 .info-chip:hover { color: var(--text); border-color: var(--text); }
 
-/* Caution beside the caption when a pinned comparison trace shares the
-   y-axis with a live trace in different units. */
-.unit-warn {
+/* Note beside the caption when a mixed-substance comparison switches the
+   y-axis to %-of-trace-maximum scaling. */
+.axis-note {
     margin-left: 0.5rem;
     font-size: 0.68rem;
     color: #f3c969;

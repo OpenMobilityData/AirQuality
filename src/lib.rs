@@ -33,8 +33,11 @@ fn profile_anchor() -> chrono::DateTime<Utc> {
 #[derive(Clone, PartialEq)]
 struct PinnedTrace {
     series: Series,
-    /// Unit of the pinned substance — compared against the live substance's
-    /// unit to warn when the shared y-axis mixes units.
+    /// Substance key and unit of the pinned trace. When the displayed traces
+    /// span more than one substance, the chart switches to a normalized
+    /// (%-of-trace-maximum) axis — different pollutants have wildly different
+    /// dynamic ranges even when their nominal units match.
+    substance: String,
     unit: &'static str,
     /// X-axis basis the trace was built on (see [`axis_kind`]).
     axis: u8,
@@ -765,10 +768,12 @@ fn App() -> impl IntoView {
             s.label = format!("{} · {} → {}", s.label, f.format("%Y-%m-%d"), t.format("%Y-%m-%d"));
         }
         s.color = pinned.with_untracked(|ps| next_pin_color(ps)).to_string();
+        let substance = selected_substance.get_untracked();
         set_pinned.update(|ps| {
             ps.push(PinnedTrace {
                 series: s,
-                unit: pollutants::unit_of(&selected_substance.get_untracked()),
+                unit: pollutants::unit_of(&substance),
+                substance,
                 axis: axis_kind(profile.get_untracked()),
             })
         });
@@ -783,23 +788,50 @@ fn App() -> impl IntoView {
     });
     let on_unpin_all = Callback::new(move |_: ()| set_pinned.set(vec![]));
 
+    // A comparison mixing substances can't share an absolute y-axis — even
+    // with matching nominal units, dynamic ranges differ wildly — so the chart
+    // switches to a normalized axis: each trace scaled to % of its own maximum.
+    let normalized = Signal::derive(move || {
+        let live = selected_substance.get();
+        pinned.with(|ps| ps.iter().any(|p| p.substance != live))
+    });
+
     // What the chart draws: pinned snapshots (oldest first) under the live trace.
     // While a comparison is active, the live trace's legend label is stamped
     // with its data span just like the pinned ones (and the caption drops its
-    // date range), so every legend row identifies its own era.
+    // date range), so every legend row identifies its own era. On a normalized
+    // axis each label also records what 100 % means for that trace.
     let display_series = Signal::derive(move || {
-        let mut out: Vec<Series> = pinned.get().into_iter().map(|p| p.series).collect();
-        let mut live = chart_series.get();
-        if !out.is_empty() {
-            if let Some((f, t)) = chart_extent.get() {
-                for s in &mut live {
+        let live_unit = pollutants::unit_of(&selected_substance.get());
+        let mut traces: Vec<(Series, &'static str)> =
+            pinned.get().into_iter().map(|p| (p.series, p.unit)).collect();
+        let comparing = !traces.is_empty();
+        for mut s in chart_series.get() {
+            if comparing {
+                if let Some((f, t)) = chart_extent.get() {
                     s.label =
                         format!("{} · {} → {}", s.label, f.format("%Y-%m-%d"), t.format("%Y-%m-%d"));
                 }
             }
+            traces.push((s, live_unit));
         }
-        out.extend(live);
-        out
+        if normalized.get() {
+            for (s, unit) in &mut traces {
+                let max = s.points.iter().map(|(_, v)| *v).fold(f64::NEG_INFINITY, f64::max);
+                if max > 0.0 {
+                    for p in &mut s.points {
+                        p.1 = p.1 / max * 100.0;
+                    }
+                    let mv = crate::components::chart::fmt_val(max);
+                    s.label = if unit.is_empty() {
+                        format!("{} — 100% = {mv}", s.label)
+                    } else {
+                        format!("{} — 100% = {mv} {unit}", s.label)
+                    };
+                }
+            }
+        }
+        traces.into_iter().map(|(s, _)| s).collect::<Vec<Series>>()
     });
     let can_pin = Signal::derive(move || {
         !chart_series.get().is_empty() && pinned.with(|ps| ps.len() < MAX_PINS)
@@ -812,13 +844,11 @@ fn App() -> impl IntoView {
             .map(|p| (p.series.label, p.series.color))
             .collect::<Vec<_>>()
     });
-    // All traces share one y-axis; flag the mix when any pinned unit differs.
-    let unit_warn = Signal::derive(move || {
-        let live = pollutants::unit_of(&selected_substance.get());
-        pinned.with(|ps| ps.iter().any(|p| p.unit != live))
-    });
 
     let y_title = Signal::derive(move || {
+        if normalized.get() {
+            return lang.get().t().norm_axis.to_string();
+        }
         let sub = selected_substance.get();
         pollutants::display_label(&sub, lang.get())
     });
@@ -872,9 +902,10 @@ fn App() -> impl IntoView {
     });
 
     // IQA acceptability thresholds, drawn as reference lines on the chart when
-    // the index is selected (empty for ordinary concentrations).
+    // the index is selected (empty for ordinary concentrations — and on the
+    // normalized comparison axis, where absolute index values don't apply).
     let iqa_thresholds = Signal::derive(move || {
-        if selected_substance.get() == "IQA" {
+        if selected_substance.get() == "IQA" && !normalized.get() {
             let t = lang.get().t();
             vec![(25.0, t.iqa_acceptable.to_string()), (50.0, t.iqa_poor.to_string())]
         } else {
@@ -1084,7 +1115,7 @@ fn App() -> impl IntoView {
                     View::Series => view! {
                         <Chart series=display_series interval=interval y_title=y_title
                                thresholds=iqa_thresholds caption=chart_caption
-                               coverage=chart_coverage.into() unit_warn=unit_warn
+                               coverage=chart_coverage.into() norm_note=normalized
                                profile=profile.into() x_range=x_range />
                     }.into_any(),
                     View::Ufp => view! { <UfpView surface=ufp_surface /> }.into_any(),
