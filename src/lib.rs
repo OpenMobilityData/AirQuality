@@ -15,7 +15,7 @@ use components::controls::Sidebar;
 use components::info::{InfoKind, InfoPage};
 use components::map::RegionMap;
 use components::ufp::UfpView;
-use data::loader::{self, DailySeries, IqaDominanceMap, Meta, SeriesFile, UfpSurface};
+use data::loader::{self, DailySeries, IqaDominanceMap, Meta, ProfileSeries, SeriesFile, UfpSurface};
 use data::pollutants;
 use data::types::{DayType, Interval, Profile, Stat, Station, View};
 use i18n::Lang;
@@ -85,6 +85,10 @@ fn App() -> impl IntoView {
     let (daily_cache, set_daily_cache) = signal::<BTreeMap<u32, DailySeries>>(BTreeMap::new());
     let (hourly_cache, set_hourly_cache) =
         signal::<BTreeMap<(u32, i32), SeriesFile>>(BTreeMap::new());
+    // Diurnal-profile tier (all years, one file per station): Weekday/Weekend
+    // profiles over ranges too long for the bounded hourly tier.
+    let (profile_cache, set_profile_cache) =
+        signal::<BTreeMap<u32, ProfileSeries>>(BTreeMap::new());
     // Modelled UFP surface grid, fetched lazily the first time its view opens.
     let (ufp_surface, set_ufp_surface) = signal::<Option<UfpSurface>>(None);
 
@@ -246,6 +250,12 @@ fn App() -> impl IntoView {
     // Hourly fine-detail is bounded: when the Hour interval spans many years we
     // load only the most recent few, to avoid pulling tens of per-year files.
     const MAX_HOURLY_YEARS: usize = 3;
+    // Diurnal (Weekday/Weekend) profiles use the exact hourly tier only while
+    // the range fits the hourly bound; longer ranges read the precomputed
+    // profile tier instead, so the profile spans the full record.
+    let diurnal_uses_hourly = move || -> bool {
+        (date_to.get().year() - date_from.get().year() + 1) as usize <= MAX_HOURLY_YEARS
+    };
     let hourly_years_in_range = move || -> Vec<i32> {
         let (lo, hi) = (date_from.get().year(), date_to.get().year());
         let avail = years.get();
@@ -275,10 +285,13 @@ fn App() -> impl IntoView {
         });
     });
 
-    // ── Fetch hourly per-year files on demand (Hour interval or diurnal profile) ──
+    // ── Fetch hourly per-year files on demand (Hour interval or short-range
+    // diurnal profile; long-range diurnal profiles use the profile tier) ──
     Effect::new(move |_| {
-        let needs_hourly =
-            interval.get() == Interval::Hour || profile.get().is_some_and(|p| p.needs_hourly());
+        let needs_hourly = match profile.get() {
+            Some(p) => p.needs_hourly() && diurnal_uses_hourly(),
+            None => interval.get() == Interval::Hour,
+        };
         if view.get() != View::Series || !needs_hourly {
             return;
         }
@@ -297,6 +310,27 @@ fn App() -> impl IntoView {
                 }
             });
         }
+    });
+
+    // ── Fetch the diurnal-profile tier for long-range Weekday/Weekend profiles ──
+    Effect::new(move |_| {
+        let needs_profile =
+            profile.get().is_some_and(|p| p.needs_hourly()) && !diurnal_uses_hourly();
+        if view.get() != View::Series || !needs_profile {
+            return;
+        }
+        let Some(sid) = selected_station.get() else { return };
+        if profile_cache.get_untracked().contains_key(&sid) {
+            return;
+        }
+        spawn_local(async move {
+            match loader::fetch_profile_series(sid).await {
+                Ok(p) => set_profile_cache.update(|c| {
+                    c.insert(sid, p);
+                }),
+                Err(e) => web_sys::console::error_1(&format!("profiles {sid}: {e}").into()),
+            }
+        });
     });
 
     // ── UFP view: fetch the modelled surface grid once, on first open ──
@@ -391,6 +425,117 @@ fn App() -> impl IntoView {
         let sub = selected_substance.get();
         let prof = profile.get();
         let iv = interval.get();
+        let anchor = profile_anchor();
+        let l = lang.get();
+        let station_name = |sid: u32| {
+            stations
+                .get()
+                .iter()
+                .find(|s| s.id == sid)
+                .map(|s| s.name.clone())
+                .unwrap_or_default()
+        };
+
+        // ── Long-range diurnal profile: precomputed profile tier ──
+        // Sums the per-year weekday/weekend × hour-of-day bins overlapping the
+        // range (year resolution), covering the whole record without hourly files.
+        if let Some(p @ (Profile::Weekday | Profile::Weekend)) = prof {
+            if !diurnal_uses_hourly() {
+                let t = l.t();
+                let cache = profile_cache.get();
+                let Some(bins) = cache.get(&sid).and_then(|ps| ps.substances.get(&sub)) else {
+                    return (vec![], None, None);
+                };
+                let (ylo, yhi) = (date_from.get().year(), date_to.get().year());
+                let weekend = p == Profile::Weekend;
+                let mut sum = [0.0_f64; 24];
+                let mut cnt = [0_u64; 24];
+                let mut years_present: Vec<i32> = Vec::new();
+                for (yr, wd_s, wd_c, we_s, we_c) in bins {
+                    if *yr < ylo || *yr > yhi {
+                        continue;
+                    }
+                    let (s, c) = if weekend { (we_s, we_c) } else { (wd_s, wd_c) };
+                    let mut any = false;
+                    for h in 0..24 {
+                        let n = c.get(h).copied().unwrap_or(0);
+                        if n > 0 {
+                            sum[h] += s.get(h).copied().unwrap_or(0.0);
+                            cnt[h] += n as u64;
+                            any = true;
+                        }
+                    }
+                    if any {
+                        years_present.push(*yr);
+                    }
+                }
+                let pts: Vec<(chrono::DateTime<Utc>, f64)> = (0..24)
+                    .filter(|&h| cnt[h] > 0)
+                    .map(|h| (anchor + Duration::hours(h as i64), sum[h] / cnt[h] as f64))
+                    .collect();
+                let (Some(&first), Some(&last)) = (years_present.first(), years_present.last())
+                else {
+                    return (vec![], None, None);
+                };
+                if pts.is_empty() {
+                    return (vec![], None, None);
+                }
+                // Extent at year resolution, clamped to the query range.
+                let data_from = NaiveDate::from_ymd_opt(first, 1, 1).unwrap().max(date_from.get());
+                let data_to = NaiveDate::from_ymd_opt(last, 12, 31).unwrap().min(date_to.get());
+                // Coverage note: late start / early end, plus whole missing years.
+                let mut parts: Vec<String> = Vec::new();
+                if (data_from - date_from.get()).num_days() > 7 {
+                    parts.push(format!("{} {}", t.cov_begins, data_from.format("%Y-%m-%d")));
+                }
+                if (date_to.get() - data_to).num_days() > 7 {
+                    parts.push(format!("{} {}", t.cov_ends, data_to.format("%Y-%m-%d")));
+                }
+                let mut n_gaps = 0u32;
+                let mut longest: Option<(i32, i32)> = None;
+                for w in years_present.windows(2) {
+                    if w[1] - w[0] > 1 {
+                        n_gaps += 1;
+                        if longest.is_none_or(|(a, b)| w[1] - w[0] > b - a) {
+                            longest = Some((w[0], w[1]));
+                        }
+                    }
+                }
+                if let Some((a, b)) = longest {
+                    let (ga, gb) = (format!("{}-12-31", a), format!("{}-01-01", b));
+                    parts.push(if n_gaps == 1 {
+                        format!("1 {}: {ga} → {gb}", t.cov_gap_singular)
+                    } else {
+                        format!("{n_gaps} {} ({} {ga} → {gb})", t.cov_gaps_plural, t.cov_longest)
+                    });
+                }
+                let coverage = (!parts.is_empty()).then(|| {
+                    let query = format!(
+                        "{}: {} → {}",
+                        t.cov_query,
+                        date_from.get().format("%Y-%m-%d"),
+                        date_to.get().format("%Y-%m-%d"),
+                    );
+                    std::iter::once(query).chain(parts).collect::<Vec<_>>().join("\n")
+                });
+                let label = format!(
+                    "{} — {} ({})",
+                    station_name(sid),
+                    pollutants::name_of(&sub, l),
+                    p.label(l)
+                );
+                return (
+                    vec![Series {
+                        label,
+                        color: "#4a9eff".to_string(),
+                        dash: String::new(),
+                        points: pts,
+                    }],
+                    Some((data_from, data_to)),
+                    coverage,
+                );
+            }
+        }
 
         let use_hourly =
             prof.is_some_and(|p| p.needs_hourly()) || (prof.is_none() && iv == Interval::Hour);
@@ -487,7 +632,6 @@ fn App() -> impl IntoView {
             }
         };
 
-        let anchor = profile_anchor();
         let pts: Vec<(chrono::DateTime<Utc>, f64)> = match prof {
             None => loader::aggregate(&readings, iv),
             Some(p @ (Profile::Weekday | Profile::Weekend)) => {
@@ -535,13 +679,7 @@ fn App() -> impl IntoView {
             return (vec![], None, None);
         }
 
-        let l = lang.get();
-        let name = stations
-            .get()
-            .iter()
-            .find(|s| s.id == sid)
-            .map(|s| s.name.clone())
-            .unwrap_or_default();
+        let name = station_name(sid);
         let label = match prof {
             None => format!("{} — {}", name, pollutants::name_of(&sub, l)),
             Some(p) => format!("{} — {} ({})", name, pollutants::name_of(&sub, l), p.label(l)),

@@ -65,6 +65,27 @@ pub async fn fetch_meta() -> Result<Meta, String> {
     fetch_json("data/meta.json").await
 }
 
+/// One local-calendar-year bin of the diurnal-profile tier:
+/// `[year, wd_sum[24], wd_cnt[24], we_sum[24], we_cnt[24]]` — per-hour value
+/// sums and sample counts (Montréal-local hour-of-day), split weekday/weekend.
+pub type ProfileYear = (i32, Vec<f64>, Vec<u32>, Vec<f64>, Vec<u32>);
+
+/// On-disk shape of `series-profiles/station-<id>.json` — the precomputed
+/// diurnal-profile tier spanning all years. Lets the Weekday/Weekend averaging
+/// profiles cover the whole record over long date ranges without downloading
+/// dozens of hourly station-year files (short ranges keep the exact hourly path).
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProfileSeries {
+    #[allow(dead_code)]
+    pub id: u32,
+    /// Per substance, sparse year bins sorted by year.
+    pub substances: BTreeMap<String, Vec<ProfileYear>>,
+}
+
+pub async fn fetch_profile_series(station_id: u32) -> Result<ProfileSeries, String> {
+    fetch_json(&format!("data/series-profiles/station-{station_id}.json")).await
+}
+
 /// On-disk shape of `ufp-surface.json` — the modelled ultrafine-particle grid
 /// extracted from the Lloyd et al. (2023) combined-model output by
 /// `scripts/extract-ufp-surface.py`. Row-major `ny × nx` values (pt/cm³, `None`

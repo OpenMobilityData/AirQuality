@@ -14,6 +14,9 @@ Outputs (under ``static/data/``):
   stations.json                     station metadata + years each reported
   iqa-dominance.json                {year -> station -> {peak_pollutant,peak_iqa,shares}}
   series-daily/station-<id>.json    per-day [idx,mean,min,max,n] per substance, all years
+  series-profiles/station-<id>.json per-year weekday/weekend × hour-of-day sums+counts
+                                    (Montréal-local), all years — diurnal profiles over
+                                    long ranges without the hourly tier
   series/station-<id>-<year>.json   hourly values per station-year (loaded on demand)
   meta.json                         years / latest / generation stamp / attribution
 
@@ -204,12 +207,18 @@ def main() -> None:
 
     os.makedirs(os.path.join(OUT, "series"), exist_ok=True)
     os.makedirs(os.path.join(OUT, "series-daily"), exist_ok=True)
+    os.makedirs(os.path.join(OUT, "series-profiles"), exist_ok=True)
 
     # Cross-year accumulators (small per entry).
     # (sid,sub,ordinal) -> [sum, count, min, max] — the day's hourly sum/count and
     # the day's true hourly extremes, so the daily tier can answer Mean/Min/Max
     # over any date range without the hourly files.
     daily: dict[tuple, list] = defaultdict(lambda: [0.0, 0, float("inf"), float("-inf")])
+    # (sid,sub,local_year,is_weekend,local_hour) -> [sum, count] — the diurnal-
+    # profile tier, bucketed by Montréal-local calendar year / weekday-vs-weekend
+    # / hour-of-day (matching the client's hourly-path bucketing), so the
+    # Weekday/Weekend profiles can span the whole record cheaply.
+    prof: dict[tuple, list] = defaultdict(lambda: [0.0, 0])
     seen_pairs: set[tuple] = set()                             # (sid,sub) ever measured
     iqa_dom: dict[str, dict] = {}                              # year -> sid -> {...}
     station_years: dict[int, set] = defaultdict(set)
@@ -231,9 +240,13 @@ def main() -> None:
             cell[2] = val
         if val > cell[3]:
             cell[3] = val
+        local = ts.astimezone(MONTREAL)
+        pcell = prof[(sid, sub, local.year, 1 if local.weekday() >= 5 else 0, local.hour)]
+        pcell[0] += val
+        pcell[1] += 1
         seen_pairs.add((sid, sub))
         present_subs.add(sub)
-        station_years[sid].add(ts_year_local(ts))
+        station_years[sid].add(local.year)
         if min_ord is None or o < min_ord:
             min_ord = o
         if max_ord is None or o > max_ord:
@@ -242,9 +255,6 @@ def main() -> None:
             min_utc = ts
         if max_utc is None or ts > max_utc:
             max_utc = ts
-
-    def ts_year_local(ts):
-        return ts.astimezone(MONTREAL).year
 
     for year in years:
         buf: dict[tuple, list] = defaultdict(list)
@@ -381,6 +391,32 @@ def main() -> None:
             "step_days": 1, "substances": subs,
         }
         with open(os.path.join(OUT, "series-daily", f"station-{sid}.json"), "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+
+    # ── diurnal-profile tier per station (across all years) ──
+    # Per substance, one sparse entry per Montréal-local calendar year:
+    # [year, wd_sum[24], wd_cnt[24], we_sum[24], we_cnt[24]] — hour-of-day
+    # sums and sample counts split weekday/weekend. The client sums the year
+    # bins overlapping its date range and divides, giving full-record
+    # Weekday/Weekend profiles without downloading the hourly tier.
+    prof_by_station: dict[int, dict] = defaultdict(lambda: defaultdict(dict))
+    for (sid, sub, yr, we, hh), (s, c) in prof.items():
+        arrs = prof_by_station[sid][sub].setdefault(
+            yr, [[0.0] * 24, [0] * 24, [0.0] * 24, [0] * 24]
+        )
+        arrs[2 * we][hh] = round(s, 3)
+        arrs[2 * we + 1][hh] = c
+    for sid, subs in prof_by_station.items():
+        if sid not in coords:
+            continue
+        payload = {
+            "id": sid,
+            "substances": {
+                sub: [[yr, *ybins[yr]] for yr in sorted(ybins)]
+                for sub, ybins in subs.items()
+            },
+        }
+        with open(os.path.join(OUT, "series-profiles", f"station-{sid}.json"), "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
 
     # ── stations.json (union with coordinates) ──
