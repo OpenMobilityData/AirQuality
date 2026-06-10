@@ -21,9 +21,18 @@ use crate::i18n::Lang;
 /// exaggeration, chosen so peaks read clearly without towering.
 const AX: f32 = 1.6;
 const AZ: f32 = 0.55;
-/// Initial turntable camera (derived from the original's eye (1.4, −1.5, 1.1)).
+/// Default turntable camera (derived from the original's eye (1.4, −1.5, 1.1)).
 const AZIM0: f64 = -0.82;
 const ELEV0: f64 = 0.49;
+/// Intro fly-in: the first frame is straight-down and north-up — it reads as
+/// an ordinary 2D map, anchoring the geography — and holds there for a beat,
+/// then the camera eases to the default oblique view. At this azimuth the
+/// top-down `up` vector is world +y (north up, east right); the elevation is
+/// the interaction clamp's maximum.
+const AZIM_TOP: f64 = -std::f64::consts::FRAC_PI_2;
+const ELEV_TOP: f64 = 1.55;
+const INTRO_HOLD_MS: f64 = 1000.0;
+const INTRO_MOVE_MS: f64 = 2400.0;
 /// Orthographic fill: world radius ~1.1 maps to this fraction of the viewport.
 const FIT: f32 = 0.42;
 /// Ground-plane reference grid spacing (km).
@@ -179,7 +188,10 @@ fn build_scene(s: &UfpSurface) -> Scene {
 // ── Rasterization ───────────────────────────────────────────────────────────
 
 /// Flat-fill one screen-space triangle into the RGBA buffer (no blending; the
-/// painter's order supplies occlusion). Pixel centres inside all three edges.
+/// painter's order supplies occlusion). Pixel centres inside all three edges;
+/// the edge functions are evaluated once per row and stepped incrementally
+/// across it (the rasterizer runs every animation/drag frame, so the inner
+/// loop is three adds and a compare per pixel).
 #[allow(clippy::too_many_arguments)]
 fn fill_tri(
     buf: &mut [u8],
@@ -202,14 +214,18 @@ fn fill_tri(
         return;
     }
     let sign = if area > 0.0 { 1.0 } else { -1.0 };
+    // d(w)/dx for each edge function (constant across the triangle).
+    let dw0 = -(by - ay) * sign;
+    let dw1 = -(cy - by) * sign;
+    let dw2 = -(ay - cy) * sign;
+    let x0 = minx as f32 + 0.5;
     for py in miny..=maxy {
         let y = py as f32 + 0.5;
+        let mut w0 = ((bx - ax) * (y - ay) - (by - ay) * (x0 - ax)) * sign;
+        let mut w1 = ((cx - bx) * (y - by) - (cy - by) * (x0 - bx)) * sign;
+        let mut w2 = ((ax - cx) * (y - cy) - (ay - cy) * (x0 - cx)) * sign;
         let row = (py * pw) as usize * 4;
         for px in minx..=maxx {
-            let x = px as f32 + 0.5;
-            let w0 = ((bx - ax) * (y - ay) - (by - ay) * (x - ax)) * sign;
-            let w1 = ((cx - bx) * (y - by) - (cy - by) * (x - bx)) * sign;
-            let w2 = ((ax - cx) * (y - cy) - (ay - cy) * (x - cx)) * sign;
             if w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0 {
                 let idx = row + px as usize * 4;
                 buf[idx] = rgb.0;
@@ -217,6 +233,9 @@ fn fill_tri(
                 buf[idx + 2] = rgb.2;
                 buf[idx + 3] = 255;
             }
+            w0 += dw0;
+            w1 += dw1;
+            w2 += dw2;
         }
     }
 }
@@ -239,6 +258,19 @@ fn basis(azim: f64, elev: f64) -> Basis {
     }
 }
 
+/// Per-frame scratch reused across renders: the RGBA pixel buffer, projected
+/// vertex coordinates, the depth-sort keys, and the offscreen compositing
+/// canvas. Re-allocating these every frame (they run to tens of MB on retina)
+/// is what stutters an animated camera.
+#[derive(Default)]
+struct Scratch {
+    buf: Vec<u8>,
+    sx: Vec<f32>,
+    sy: Vec<f32>,
+    order: Vec<(f32, u32)>,
+    off: Option<web_sys::HtmlCanvasElement>,
+}
+
 /// Render the whole scene onto `canvas` (device-pixel sized `pw × ph`).
 fn render(
     canvas: &web_sys::HtmlCanvasElement,
@@ -246,7 +278,7 @@ fn render(
     azim: f64,
     elev: f64,
     zoom: f64,
-    buf: &mut Vec<u8>,
+    scratch: &mut Scratch,
 ) {
     let (pw, ph) = (canvas.width() as i32, canvas.height() as i32);
     if pw < 2 || ph < 2 {
@@ -311,8 +343,11 @@ fn render(
     let n = scene.wz.len();
     let nxv = scene.nx;
     let nyv = n / nxv;
-    let mut sx = vec![0.0_f32; n];
-    let mut sy = vec![0.0_f32; n];
+    scratch.sx.clear();
+    scratch.sx.resize(n, 0.0);
+    scratch.sy.clear();
+    scratch.sy.resize(n, 0.0);
+    let (sx, sy) = (&mut scratch.sx, &mut scratch.sy);
     for j in 0..nyv {
         for i in 0..nxv {
             let v = j * nxv + i;
@@ -323,19 +358,17 @@ fn render(
     }
 
     // Painter's order: draw far cells first (depth = distance toward camera).
-    let mut order: Vec<(f32, u32)> = scene
-        .cells
-        .iter()
-        .enumerate()
-        .map(|(k, c)| {
-            (c.cx * b.dir.0 + c.cy * b.dir.1 + c.cz * b.dir.2, k as u32)
-        })
-        .collect();
+    let order = &mut scratch.order;
+    order.clear();
+    order.extend(scene.cells.iter().enumerate().map(|(k, c)| {
+        (c.cx * b.dir.0 + c.cy * b.dir.1 + c.cz * b.dir.2, k as u32)
+    }));
     order.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
+    let buf = &mut scratch.buf;
     buf.clear();
     buf.resize((pw * ph * 4) as usize, 0);
-    for &(_, k) in &order {
+    for &(_, k) in order.iter() {
         let c = &scene.cells[k as usize];
         let v = c.v as usize;
         let p00 = (sx[v], sy[v]);
@@ -346,18 +379,20 @@ fn render(
         fill_tri(buf, pw, ph, p00, p11, p01, c.rgb);
     }
 
-    // Blit through a transparent offscreen canvas so the surface composites
-    // over the grid (putImageData would replace the whole rectangle).
-    let Some(document) = web_sys::window().and_then(|w| w.document()) else { return };
-    let Some(off) = document
-        .create_element("canvas")
-        .ok()
-        .and_then(|c| c.dyn_into::<web_sys::HtmlCanvasElement>().ok())
-    else {
-        return;
-    };
-    off.set_width(pw as u32);
-    off.set_height(ph as u32);
+    // Blit through a transparent offscreen canvas (kept across frames) so the
+    // surface composites over the grid (putImageData would replace the whole
+    // rectangle).
+    if scratch.off.is_none() {
+        scratch.off = web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.create_element("canvas").ok())
+            .and_then(|c| c.dyn_into::<web_sys::HtmlCanvasElement>().ok());
+    }
+    let Some(off) = scratch.off.as_ref() else { return };
+    if off.width() != pw as u32 || off.height() != ph as u32 {
+        off.set_width(pw as u32);
+        off.set_height(ph as u32);
+    }
     let Some(octx) = off
         .get_context("2d")
         .ok()
@@ -372,7 +407,7 @@ fn render(
         ph as u32,
     ) {
         let _ = octx.put_image_data(&img, 0.0, 0.0);
-        let _ = ctx.draw_image_with_html_canvas_element(&off, 0.0, 0.0);
+        let _ = ctx.draw_image_with_html_canvas_element(off, 0.0, 0.0);
     }
 
     // North marker just beyond the +y edge of the ground plane.
@@ -435,9 +470,38 @@ type Pointers = Vec<(i32, f64, f64)>;
 pub fn UfpView(surface: ReadSignal<Option<UfpSurface>>) -> impl IntoView {
     let lang = use_context::<ReadSignal<Lang>>().expect("Lang context not provided");
 
-    let (azim, set_azim) = signal(AZIM0);
-    let (elev, set_elev) = signal(ELEV0);
+    // Camera opens on the top-down view; the intro animation below brings it
+    // to the default oblique (AZIM0/ELEV0) once the first frame can draw.
+    let (azim, set_azim) = signal(AZIM_TOP);
+    let (elev, set_elev) = signal(ELEV_TOP);
     let (zoom, set_zoom) = signal(1.0_f64);
+
+    // Intro-animation state. `intro_active` is the cancel flag (any user
+    // interaction clears it); the rAF closure and request id live here so the
+    // loop can reschedule itself and unmount can cancel a pending frame.
+    let intro_started = StoredValue::new_local(false);
+    let intro_active = StoredValue::new_local(false);
+    let raf_closure = StoredValue::new_local(None::<Closure<dyn FnMut(f64)>>);
+    let raf_id = StoredValue::new_local(0i32);
+    let request_next = move || {
+        let Some(win) = web_sys::window() else { return };
+        raf_closure.with_value(|c| {
+            if let Some(c) = c {
+                if let Ok(id) = win.request_animation_frame(c.as_ref().unchecked_ref()) {
+                    raf_id.set_value(id);
+                }
+            }
+        });
+    };
+    on_cleanup(move || {
+        if let Some(id) = raf_id.try_get_value() {
+            if id != 0 {
+                if let Some(win) = web_sys::window() {
+                    let _ = win.cancel_animation_frame(id);
+                }
+            }
+        }
+    });
 
     let container_ref = NodeRef::<leptos::html::Div>::new();
     let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
@@ -482,10 +546,11 @@ pub fn UfpView(surface: ReadSignal<Option<UfpSurface>>) -> impl IntoView {
         }
     });
 
-    // Scene geometry, built once when the surface data arrives; the pixel
-    // buffer is reused across frames (it can run to tens of MB on retina).
+    // Scene geometry, built once when the surface data arrives; the per-frame
+    // scratch (pixel buffer, projection arrays, offscreen canvas) is reused
+    // across frames so an animated camera doesn't churn allocations.
     let scene_store = StoredValue::new_local(None::<std::rc::Rc<Scene>>);
-    let pixel_buf = StoredValue::new_local(Vec::<u8>::new());
+    let scratch_store = StoredValue::new_local(Scratch::default());
 
     // Redraw on any input change: data arrival, container size, camera.
     Effect::new(move |_| {
@@ -507,13 +572,51 @@ pub fn UfpView(surface: ReadSignal<Option<UfpSurface>>) -> impl IntoView {
         let dpr = web_sys::window().map(|w| w.device_pixel_ratio()).unwrap_or(1.0).clamp(1.0, 2.0);
         canvas.set_width((w * dpr) as u32);
         canvas.set_height((h * dpr) as u32);
-        pixel_buf.update_value(|buf| render(&canvas, &scene, az, el, zm, buf));
+        scratch_store.update_value(|s| render(&canvas, &scene, az, el, zm, s));
+    });
+
+    // ── Intro fly-in: top-down → oblique, once the first frame can draw ──
+    Effect::new(move |_| {
+        let (w, _) = size.get();
+        if w < 2.0 || surface.with(|s| s.is_none()) || intro_started.get_value() {
+            return;
+        }
+        intro_started.set_value(true);
+        intro_active.set_value(true);
+        let t0 = web_sys::window()
+            .and_then(|w| w.performance())
+            .map(|p| p.now())
+            .unwrap_or(0.0);
+        raf_closure.set_value(Some(Closure::new(move |now: f64| {
+            // Stop silently once cancelled (user interaction) or unmounted —
+            // `try_*` so a stale frame after teardown touches nothing.
+            if intro_active.try_get_value() != Some(true) {
+                return;
+            }
+            // Hold the top-down view for a beat, then ease to the oblique.
+            let t = (((now - t0) - INTRO_HOLD_MS) / INTRO_MOVE_MS).clamp(0.0, 1.0);
+            if t > 0.0 {
+                // Quintic smootherstep: zero velocity *and* acceleration at
+                // both ends, so leaving the hold doesn't visibly kick.
+                let e = t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+                let _ = set_azim.try_set(AZIM_TOP + (AZIM0 - AZIM_TOP) * e);
+                let _ = set_elev.try_set(ELEV_TOP + (ELEV0 - ELEV_TOP) * e);
+            }
+            if t < 1.0 {
+                request_next();
+            } else {
+                intro_active.set_value(false);
+                raf_id.set_value(0);
+            }
+        })));
+        request_next();
     });
 
     // ── Turntable interaction (pointer events cover mouse + touch) ──
     let pointers = StoredValue::new_local(Pointers::new());
     let on_pointer_down = move |e: web_sys::PointerEvent| {
         e.prevent_default();
+        intro_active.set_value(false); // grabbing the scene ends the fly-in
         if let Some(canvas) = canvas_ref.get() {
             let _ = canvas.set_pointer_capture(e.pointer_id());
         }
@@ -550,9 +653,11 @@ pub fn UfpView(surface: ReadSignal<Option<UfpSurface>>) -> impl IntoView {
     };
     let on_wheel = move |e: web_sys::WheelEvent| {
         e.prevent_default();
+        intro_active.set_value(false);
         set_zoom.update(|z| *z = (*z * (-e.delta_y() * 0.0015).exp()).clamp(0.4, 6.0));
     };
     let on_dblclick = move |_| {
+        intro_active.set_value(false);
         set_azim.set(AZIM0);
         set_elev.set(ELEV0);
         set_zoom.set(1.0);
