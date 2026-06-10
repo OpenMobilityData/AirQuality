@@ -586,14 +586,23 @@ pub fn UfpView(surface: ReadSignal<Option<UfpSurface>>) -> impl IntoView {
         scratch_store.update_value(|s| render(&canvas, &scene, az, el, zm, s));
     });
 
-    // ── Intro fly-in: top-down → oblique, once the first frame can draw ──
-    Effect::new(move |_| {
-        let (w, _) = size.get();
-        if w < 2.0 || surface.with(|s| s.is_none()) || intro_started.get_value() {
-            return;
+    // ── Intro fly-in: top-down → oblique ──
+    // Shared by the first render and the double-click reset (which replays it).
+    let start_intro = move || {
+        // A pending frame still points at the closure we're about to replace;
+        // cancel it so the browser never calls a dropped closure.
+        let pending = raf_id.get_value();
+        if pending != 0 {
+            if let Some(win) = web_sys::window() {
+                let _ = win.cancel_animation_frame(pending);
+            }
+            raf_id.set_value(0);
         }
-        intro_started.set_value(true);
         intro_active.set_value(true);
+        // Snap to the opening top-down view; the hold phase keeps it there.
+        set_azim.set(AZIM_TOP);
+        set_elev.set(ELEV_TOP);
+        set_zoom.set(1.0);
         let t0 = web_sys::window()
             .and_then(|w| w.performance())
             .map(|p| p.now())
@@ -621,6 +630,15 @@ pub fn UfpView(surface: ReadSignal<Option<UfpSurface>>) -> impl IntoView {
             }
         })));
         request_next();
+    };
+    // Run it once the first frame can draw (data loaded, container measured).
+    Effect::new(move |_| {
+        let (w, _) = size.get();
+        if w < 2.0 || surface.with(|s| s.is_none()) || intro_started.get_value() {
+            return;
+        }
+        intro_started.set_value(true);
+        start_intro();
     });
 
     // ── Turntable interaction (pointer events cover mouse + touch) ──
@@ -667,12 +685,8 @@ pub fn UfpView(surface: ReadSignal<Option<UfpSurface>>) -> impl IntoView {
         intro_active.set_value(false);
         set_zoom.update(|z| *z = (*z * (-e.delta_y() * 0.0015).exp()).clamp(0.4, 6.0));
     };
-    let on_dblclick = move |_| {
-        intro_active.set_value(false);
-        set_azim.set(AZIM0);
-        set_elev.set(ELEV0);
-        set_zoom.set(1.0);
-    };
+    // Double-click replays the load animation (ending on the same default view).
+    let on_dblclick = move |_| start_intro();
 
     // ── PNG export (copy / download), mirroring the chart/map widgets ──
     let export_title = move || lang.get().t().ufp_title.to_string();
