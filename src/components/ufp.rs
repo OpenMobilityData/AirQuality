@@ -21,9 +21,11 @@ use crate::i18n::Lang;
 /// exaggeration, chosen so peaks read clearly without towering.
 const AX: f32 = 1.6;
 const AZ: f32 = 0.55;
-/// Default turntable camera (derived from the original's eye (1.4, −1.5, 1.1)).
-const AZIM0: f64 = -0.82;
-const ELEV0: f64 = 0.49;
+/// Default turntable camera: a high, north-to-the-left oblique — elevated
+/// enough that the tall downtown/highway ridges don't occlude the corridors
+/// behind them, while still reading clearly as a relief surface.
+const AZIM0: f64 = 0.20;
+const ELEV0: f64 = 1.00;
 /// Intro fly-in: the first frame is straight-down and north-up — it reads as
 /// an ordinary 2D map, anchoring the geography — and holds there for a beat,
 /// then the camera eases to the default oblique view. At this azimuth the
@@ -101,17 +103,22 @@ struct Scene {
 
 fn build_scene(s: &UfpSurface) -> Scene {
     let (nx, ny) = (s.nx, s.ny);
+    // Axis steps are signed: the exported grid stores rows north→south, so
+    // `dy` is negative. World coordinates therefore come from the actual km
+    // values (centred on the extent midpoint), which keeps world +y = north
+    // regardless of row order — the N marker and grid depend on that.
     let x_span_km = (nx - 1) as f64 * s.dx;
     let y_span_km = (ny - 1) as f64 * s.dy;
+    let (x_mid, y_mid) = (s.x0 + x_span_km / 2.0, s.y0 + y_span_km / 2.0);
     // Equal horizontal scale in both axes; z exaggeration as in the original.
-    let km_to_world = AX as f64 / x_span_km;
-    let ay_half = (y_span_km * km_to_world / 2.0) as f32;
+    let km_to_world = AX as f64 / x_span_km.abs();
+    let ay_half = (y_span_km.abs() * km_to_world / 2.0) as f32;
     let zspan = (s.zmax - s.zmin).max(1e-9) as f32;
 
     let wx: Vec<f32> =
-        (0..nx).map(|i| (i as f32 / (nx - 1) as f32 - 0.5) * AX).collect();
+        (0..nx).map(|i| ((s.x0 + i as f64 * s.dx - x_mid) * km_to_world) as f32).collect();
     let wy: Vec<f32> =
-        (0..ny).map(|j| (j as f32 / (ny - 1) as f32 - 0.5) * 2.0 * ay_half).collect();
+        (0..ny).map(|j| ((s.y0 + j as f64 * s.dy - y_mid) * km_to_world) as f32).collect();
     let wz: Vec<f32> = s
         .z
         .iter()
@@ -317,17 +324,20 @@ fn render(
     ctx.set_stroke_style_str("#22304a");
     ctx.set_line_width(1.0);
     // Grid lines at whole multiples of GRID_KM (in the source's km frame)
-    // within the modelled extent.
+    // within the modelled extent. Axis endpoints are ordered (the y axis runs
+    // north→south in the data), so iterate over the min..max km range.
     let x_mid = (scene.x0_km + scene.x1_km) / 2.0;
     let y_mid = (scene.y0_km + scene.y1_km) / 2.0;
-    let mut k = (scene.x0_km / GRID_KM).ceil();
-    while k * GRID_KM <= scene.x1_km {
+    let (x_lo, x_hi) = (scene.x0_km.min(scene.x1_km), scene.x0_km.max(scene.x1_km));
+    let (y_lo, y_hi) = (scene.y0_km.min(scene.y1_km), scene.y0_km.max(scene.y1_km));
+    let mut k = (x_lo / GRID_KM).ceil();
+    while k * GRID_KM <= x_hi {
         let wxl = ((k * GRID_KM - x_mid) * scene.km_to_world) as f32;
         line(&ctx, project(wxl, -ayh, fz), project(wxl, ayh, fz));
         k += 1.0;
     }
-    let mut k = (scene.y0_km / GRID_KM).ceil();
-    while k * GRID_KM <= scene.y1_km {
+    let mut k = (y_lo / GRID_KM).ceil();
+    while k * GRID_KM <= y_hi {
         let wyl = ((k * GRID_KM - y_mid) * scene.km_to_world) as f32;
         line(&ctx, project(-axh, wyl, fz), project(axh, wyl, fz));
         k += 1.0;
