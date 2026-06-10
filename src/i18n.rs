@@ -248,7 +248,7 @@ pub const EN: T = T {
     iqa_poor: "Poor",
     iqa_higher_worse: "Higher = worse air quality",
 
-    ufp_title: "Modelled ultrafine particles (UFP) — Montréal 2020 · height = concentration",
+    ufp_title: "Modelled annual median outdoor ultrafine-particle (UFP) concentration — Montréal 2020 · height = concentration",
     ufp_loading: "Loading surface…",
     ufp_hint: "Drag to rotate · scroll or pinch to zoom · double-click to reset",
     ufp_legend_title: "UFP (particles/cm³)",
@@ -336,7 +336,7 @@ pub const FR: T = T {
     iqa_poor: "Mauvais",
     iqa_higher_worse: "Valeur élevée = air plus pollué",
 
-    ufp_title: "Particules ultrafines (PUF) modélisées — Montréal 2020 · hauteur = concentration",
+    ufp_title: "Concentration extérieure médiane annuelle modélisée de particules ultrafines (PUF) — Montréal 2020 · hauteur = concentration",
     ufp_loading: "Chargement de la surface…",
     ufp_hint: "Glissez pour pivoter · molette ou pincement pour zoomer · double-clic pour réinitialiser",
     ufp_legend_title: "PUF (particules/cm³)",
