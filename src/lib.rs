@@ -381,8 +381,11 @@ fn App() -> impl IntoView {
     // the range onto a short repeating base — Weekday/Weekend → a 24-hour diurnal
     // mean from the hourly tier; Weekly → a 7-point day-of-week mean from the daily
     // tier (Montreal-local; UTC-midnight daily stamps use their calendar weekday).
-    let build_series = move || -> Vec<Series> {
-        let Some(sid) = selected_station.get() else { return vec![] };
+    // Also returns the date extent of the readings that actually feed the chart:
+    // the station's record is often much shorter than the query range, and the
+    // caption should describe the data shown, not the query.
+    let build_series = move || -> (Vec<Series>, Option<(NaiveDate, NaiveDate)>) {
+        let Some(sid) = selected_station.get() else { return (vec![], None) };
         let sub = selected_substance.get();
         let prof = profile.get();
         let iv = interval.get();
@@ -401,11 +404,11 @@ fn App() -> impl IntoView {
         } else {
             match daily_cache.get().get(&sid) {
                 Some(d) => d.readings(&sub),
-                None => return vec![],
+                None => return (vec![], None),
             }
         };
         if readings.is_empty() {
-            return vec![];
+            return (vec![], None);
         }
 
         // Date-range filter on the raw readings.
@@ -415,8 +418,20 @@ fn App() -> impl IntoView {
             from_dt.map_or(true, |f| r.timestamp >= f) && to_dt.map_or(true, |t| r.timestamp <= t)
         });
         if readings.is_empty() {
-            return vec![];
+            return (vec![], None);
         }
+
+        // Actual span of the in-range data (the readings are not sorted across
+        // tier files, so scan rather than take first/last).
+        let extent = {
+            let mut lo = readings[0].timestamp;
+            let mut hi = readings[0].timestamp;
+            for r in &readings {
+                lo = lo.min(r.timestamp);
+                hi = hi.max(r.timestamp);
+            }
+            Some((lo.date_naive(), hi.date_naive()))
+        };
 
         let anchor = profile_anchor();
         let pts: Vec<(chrono::DateTime<Utc>, f64)> = match prof {
@@ -454,7 +469,7 @@ fn App() -> impl IntoView {
             }
         };
         if pts.is_empty() {
-            return vec![];
+            return (vec![], None);
         }
 
         let l = lang.get();
@@ -468,10 +483,18 @@ fn App() -> impl IntoView {
             None => format!("{} — {}", name, pollutants::name_of(&sub, l)),
             Some(p) => format!("{} — {} ({})", name, pollutants::name_of(&sub, l), p.label(l)),
         };
-        vec![Series { label, color: "#4a9eff".to_string(), dash: String::new(), points: pts }]
+        (
+            vec![Series { label, color: "#4a9eff".to_string(), dash: String::new(), points: pts }],
+            extent,
+        )
     };
     let (chart_series, set_chart_series) = signal::<Vec<Series>>(vec![]);
-    Effect::new(move |_| set_chart_series.set(build_series()));
+    let (chart_extent, set_chart_extent) = signal::<Option<(NaiveDate, NaiveDate)>>(None);
+    Effect::new(move |_| {
+        let (series, extent) = build_series();
+        set_chart_series.set(series);
+        set_chart_extent.set(extent);
+    });
 
     let y_title = Signal::derive(move || {
         let sub = selected_substance.get();
@@ -492,10 +515,18 @@ fn App() -> impl IntoView {
             Some(p) => format!("{} {}", p.label(l), l.t().profile.to_lowercase()),
             None => interval.get().label(l).to_string(),
         };
+        // Date slot: the span of the data actually plotted — the station's
+        // record is often much shorter than the query range, and a caption
+        // showing the query would contradict the axis. Falls back to the
+        // query range while nothing is plotted (loading / no data).
+        let (from, to) = match chart_extent.get() {
+            Some((f, t)) => (f, t),
+            None => (date_from.get(), date_to.get()),
+        };
         format!(
             "{name} · {sub} · {mode} · {} → {}",
-            date_from.get().format("%Y-%m-%d"),
-            date_to.get().format("%Y-%m-%d"),
+            from.format("%Y-%m-%d"),
+            to.format("%Y-%m-%d"),
         )
     });
 
