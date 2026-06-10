@@ -66,7 +66,7 @@ pub async fn fetch_meta() -> Result<Meta, String> {
 }
 
 /// On-disk shape of `ufp-surface.json` — the modelled ultrafine-particle grid
-/// extracted from the Weichenthal et al. (2023) combined-model output by
+/// extracted from the Lloyd et al. (2023) combined-model output by
 /// `scripts/extract-ufp-surface.py`. Row-major `ny × nx` values (pt/cm³, `None`
 /// = outside the modelled area) over a uniform km grid anchored at `(x0, y0)`
 /// with steps `(dx, dy)`; x runs west→east, y south→north. `cmin`/`cmax` are

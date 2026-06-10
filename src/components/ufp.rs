@@ -1,5 +1,5 @@
 //! Interactive 3D surface of modelled ultrafine-particle (UFP) concentrations
-//! (Weichenthal et al. 2023 combined model, Montréal 2020).
+//! (Lloyd et al. 2023 combined model, Montréal 2020).
 //!
 //! Rendered natively: the grid is software-rasterized in Rust into an RGBA
 //! pixel buffer (flat-shaded quads, painter's order) and blitted with a single
@@ -419,7 +419,7 @@ async fn build_png_blob(
     ctx.set_fill_style_str("#8892a4");
     ctx.set_text_align("right");
     let _ = ctx.fill_text(
-        "Weichenthal et al. 2023 · Environment International",
+        "Lloyd et al. 2023 · Environment International",
         pw as f64 - cap_h * 0.4,
         ph as f64 + cap_h / 2.0,
     );

@@ -78,7 +78,7 @@ def main():
 
     valid = [v for v in flat if v is not None]
     doc = {
-        "source": "Weichenthal et al. 2023, Environment International — "
+        "source": "Lloyd et al. 2023, Environment International — "
         "combined LUR + deep-learning model, Montréal 2020",
         "unit": "pt/cm³",
         "nx": i1 - i0,
