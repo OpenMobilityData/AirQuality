@@ -282,7 +282,7 @@ pub const EN: T = T {
 
     comparison: "Comparison",
     pin_trace: "Pin current trace",
-    unpin_trace: "Remove pinned trace",
+    unpin_trace: "Unpin trace",
     pin_hint: "Pin the trace, then change the controls to overlay a second one",
     pin_units_warn: "pinned trace uses different units (shared axis)",
 
@@ -383,7 +383,7 @@ pub const FR: T = T {
 
     comparison: "Comparaison",
     pin_trace: "Épingler la courbe actuelle",
-    unpin_trace: "Retirer la courbe épinglée",
+    unpin_trace: "Désépingler la courbe",
     pin_hint: "Épinglez la courbe, puis modifiez les réglages pour en superposer une seconde",
     pin_units_warn: "la courbe épinglée utilise d'autres unités (axe partagé)",
 

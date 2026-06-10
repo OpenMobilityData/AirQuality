@@ -366,11 +366,23 @@ pub fn Sidebar(
                             <p class="pin-hint">{move || lang.get().t().pin_hint}</p>
                         }.into_any(),
                     }}
+                    // The action button toggles: it pins while nothing is held,
+                    // and unpins once something is (replacing = unpin, then pin).
                     <div class="btn-group">
-                        <button disabled=move || !can_pin.get()
-                                on:click=move |_| on_pin.run(())>
-                            {move || lang.get().t().pin_trace}
-                        </button>
+                        {move || if pinned_label.get().is_some() {
+                            view! {
+                                <button on:click=move |_| on_unpin.run(())>
+                                    {move || lang.get().t().unpin_trace}
+                                </button>
+                            }.into_any()
+                        } else {
+                            view! {
+                                <button disabled=move || !can_pin.get()
+                                        on:click=move |_| on_pin.run(())>
+                                    {move || lang.get().t().pin_trace}
+                                </button>
+                            }.into_any()
+                        }}
                     </div>
                 </div>
             </Show>
