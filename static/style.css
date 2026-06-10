@@ -184,6 +184,57 @@ button:disabled:hover { background: var(--accent); border-color: var(--border); 
 }
 .info-chip:hover { color: var(--text); border-color: var(--text); }
 
+/* Caution beside the caption when a pinned comparison trace shares the
+   y-axis with a live trace in different units. */
+.unit-warn {
+    margin-left: 0.5rem;
+    font-size: 0.68rem;
+    color: #f3c969;
+}
+
+/* ── Trace comparison (Series sidebar) ── */
+.pin-hint {
+    font-size: 0.66rem;
+    line-height: 1.4;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+}
+.pinned-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.4rem;
+    margin-bottom: 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--chart-bg);
+    font-size: 0.68rem;
+    line-height: 1.35;
+    color: var(--text);
+}
+.pinned-swatch {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: #ff9f43; /* keep in sync with PIN_COLOR in lib.rs */
+}
+.pinned-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pinned-clear {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: none;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.pinned-clear:hover { color: var(--text); border-color: var(--text-muted); }
+
 /* Substance selector as a scrollable single-select list. */
 .substance-select {
     background: var(--chart-bg);

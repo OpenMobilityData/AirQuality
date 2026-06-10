@@ -58,6 +58,13 @@ pub fn Sidebar(
 
     date_presets: ReadSignal<Vec<(String, NaiveDate, NaiveDate)>>,
     on_date_preset: Callback<(NaiveDate, NaiveDate)>,
+
+    /// Trace comparison (Series view): label of the pinned snapshot (None =
+    /// nothing pinned), whether the live trace is pinnable, and the actions.
+    pinned_label: Signal<Option<String>>,
+    can_pin: Signal<bool>,
+    on_pin: Callback<()>,
+    on_unpin: Callback<()>,
 ) -> impl IntoView {
     let lang = use_context::<ReadSignal<Lang>>().expect("Lang context not provided");
 
@@ -337,6 +344,33 @@ pub fn Sidebar(
                                        on_date_to.run(d);
                                    }
                                }/>
+                    </div>
+                </div>
+
+                // ── Trace comparison: pin the current trace, overlay a new one ──
+                <div class="control-group">
+                    <label class="section-label">{move || lang.get().t().comparison}</label>
+                    {move || match pinned_label.get() {
+                        Some(lbl) => view! {
+                            <div class="pinned-chip">
+                                <span class="pinned-swatch"></span>
+                                <span class="pinned-text">{lbl}</span>
+                                <button class="pinned-clear"
+                                        title=move || lang.get().t().unpin_trace
+                                        on:click=move |_| on_unpin.run(())>
+                                    "×"
+                                </button>
+                            </div>
+                        }.into_any(),
+                        None => view! {
+                            <p class="pin-hint">{move || lang.get().t().pin_hint}</p>
+                        }.into_any(),
+                    }}
+                    <div class="btn-group">
+                        <button disabled=move || !can_pin.get()
+                                on:click=move |_| on_pin.run(())>
+                            {move || lang.get().t().pin_trace}
+                        </button>
                     </div>
                 </div>
             </Show>

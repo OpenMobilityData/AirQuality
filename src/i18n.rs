@@ -171,6 +171,16 @@ pub struct T {
     pub select_station_desktop: &'static str,
     pub select_station_mobile: &'static str,
 
+    // Trace comparison (Series view): pin the current trace, then reconfigure
+    // the controls to overlay a second, live trace.
+    pub comparison: &'static str,
+    pub pin_trace: &'static str,
+    pub unpin_trace: &'static str,
+    /// Hint under the pin button while nothing is pinned.
+    pub pin_hint: &'static str,
+    /// Caution shown when the pinned and live traces have different units.
+    pub pin_units_warn: &'static str,
+
     // Chart coverage chip (shown when the plotted data doesn't fully cover
     // the query range, or has long internal gaps).
     pub cov_query: &'static str,
@@ -270,6 +280,12 @@ pub const EN: T = T {
     select_station_desktop: "Select a station and substance from the sidebar to view its time series",
     select_station_mobile: "Select a station and substance from the Filters menu to view its time series",
 
+    comparison: "Comparison",
+    pin_trace: "Pin current trace",
+    unpin_trace: "Remove pinned trace",
+    pin_hint: "Pin the trace, then change the controls to overlay a second one",
+    pin_units_warn: "pinned trace uses different units (shared axis)",
+
     cov_query: "Requested range",
     cov_begins: "Data begins",
     cov_ends: "Data ends",
@@ -364,6 +380,12 @@ pub const FR: T = T {
 
     select_station_desktop: "Sélectionnez une station et une substance dans la barre latérale pour afficher la série temporelle",
     select_station_mobile: "Sélectionnez une station et une substance dans le menu Filtres pour afficher la série temporelle",
+
+    comparison: "Comparaison",
+    pin_trace: "Épingler la courbe actuelle",
+    unpin_trace: "Retirer la courbe épinglée",
+    pin_hint: "Épinglez la courbe, puis modifiez les réglages pour en superposer une seconde",
+    pin_units_warn: "la courbe épinglée utilise d'autres unités (axe partagé)",
 
     cov_query: "Plage demandée",
     cov_begins: "Données à partir du",

@@ -302,7 +302,9 @@ fn gap_threshold_secs(interval: Interval) -> i64 {
 
 #[component]
 pub fn Chart(
-    series: ReadSignal<Vec<Series>>,
+    /// Traces to draw: the live selection, optionally preceded by a pinned
+    /// comparison snapshot (the chart itself is trace-count agnostic).
+    series: Signal<Vec<Series>>,
     interval: ReadSignal<Interval>,
     /// Y-axis title, e.g. "Nitrogen dioxide (ppb)".
     y_title: Signal<String>,
@@ -316,6 +318,9 @@ pub fn Chart(
     /// (late start / early end / long gaps); shown as a hoverable info chip
     /// beside the caption. `None` hides the chip.
     coverage: Signal<Option<String>>,
+    /// True when a pinned comparison trace uses different units than the live
+    /// one — both share the y-axis, so a caution is shown beside the caption.
+    unit_warn: Signal<bool>,
     /// Active averaging profile (None = ordinary time series) — switches the
     /// x-axis to a 24-hour (diurnal) or 7-day (weekly) synthetic base.
     profile: Signal<Option<Profile>>,
@@ -620,6 +625,9 @@ pub fn Chart(
                 {move || caption.get()}
                 {move || coverage.get().map(|tip| view! {
                     <span class="info-chip" title=tip>"i"</span>
+                })}
+                {move || unit_warn.get().then(|| view! {
+                    <span class="unit-warn">{move || lang.get().t().pin_units_warn}</span>
                 })}
             </div>
 

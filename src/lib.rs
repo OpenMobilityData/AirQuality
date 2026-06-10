@@ -28,6 +28,32 @@ fn profile_anchor() -> chrono::DateTime<Utc> {
     )
 }
 
+/// A frozen copy of the live trace, kept on the chart while the controls are
+/// reconfigured to overlay a second, live trace (A/B comparison).
+#[derive(Clone, PartialEq)]
+struct PinnedTrace {
+    series: Series,
+    /// Unit of the pinned substance — compared against the live substance's
+    /// unit to warn when the shared y-axis mixes units.
+    unit: &'static str,
+    /// X-axis basis the trace was built on (see [`axis_kind`]).
+    axis: u8,
+}
+
+/// X-axis basis of the chart for a given profile selection: ordinary time (0),
+/// the 24-hour diurnal base (1), or the 7-day weekly base (2). Traces on
+/// different bases can't share an axis, so changing basis clears the pin.
+fn axis_kind(p: Option<Profile>) -> u8 {
+    match p {
+        None => 0,
+        Some(Profile::Weekday | Profile::Weekend) => 1,
+        Some(Profile::Weekly) => 2,
+    }
+}
+
+/// Colour of the pinned trace (the live trace keeps the usual blue).
+const PIN_COLOR: &str = "#ff9f43";
+
 #[wasm_bindgen(start)]
 pub fn main() {
     console_error_panic_hook::set_once();
@@ -700,6 +726,49 @@ fn App() -> impl IntoView {
         set_chart_coverage.set(coverage);
     });
 
+    // ── Trace comparison: one pinned snapshot + the live trace ──
+    // "Pin" freezes the current trace (relabelled with its data span, recoloured)
+    // so the controls can be reconfigured into a second, live trace on the same
+    // axes. Switching the x-axis basis (ordinary time ↔ diurnal ↔ weekly) clears
+    // the pin, since traces on different bases can't overlay meaningfully.
+    let (pinned, set_pinned) = signal::<Option<PinnedTrace>>(None);
+    Effect::new(move |_| {
+        let kind = axis_kind(profile.get());
+        if pinned.with_untracked(|p| p.as_ref().is_some_and(|p| p.axis != kind)) {
+            set_pinned.set(None);
+        }
+    });
+    let on_pin = Callback::new(move |_: ()| {
+        let Some(mut s) = chart_series.get_untracked().first().cloned() else { return };
+        // Stamp the label with the span of data behind the snapshot, so the
+        // legend identifies which era the pinned curve describes.
+        if let Some((f, t)) = chart_extent.get_untracked() {
+            s.label = format!("{} · {} → {}", s.label, f.format("%Y-%m-%d"), t.format("%Y-%m-%d"));
+        }
+        s.color = PIN_COLOR.to_string();
+        set_pinned.set(Some(PinnedTrace {
+            series: s,
+            unit: pollutants::unit_of(&selected_substance.get_untracked()),
+            axis: axis_kind(profile.get_untracked()),
+        }));
+    });
+    let on_unpin = Callback::new(move |_: ()| set_pinned.set(None));
+
+    // What the chart draws: the pinned snapshot (if any) under the live trace.
+    let display_series = Signal::derive(move || {
+        let mut out: Vec<Series> = pinned.get().map(|p| p.series).into_iter().collect();
+        out.extend(chart_series.get());
+        out
+    });
+    let can_pin = Signal::derive(move || !chart_series.get().is_empty());
+    let pinned_label = Signal::derive(move || pinned.get().map(|p| p.series.label));
+    // Both traces share one y-axis; flag the combination when units differ.
+    let unit_warn = Signal::derive(move || {
+        pinned
+            .get()
+            .is_some_and(|p| p.unit != pollutants::unit_of(&selected_substance.get()))
+    });
+
     let y_title = Signal::derive(move || {
         let sub = selected_substance.get();
         pollutants::display_label(&sub, lang.get())
@@ -932,6 +1001,10 @@ fn App() -> impl IntoView {
                 on_date_to=on_date_to
                 date_presets=date_presets
                 on_date_preset=on_date_preset
+                pinned_label=pinned_label
+                can_pin=can_pin
+                on_pin=on_pin
+                on_unpin=on_unpin
             />
 
             <main>
@@ -953,9 +1026,9 @@ fn App() -> impl IntoView {
                         />
                     }.into_any(),
                     View::Series => view! {
-                        <Chart series=chart_series interval=interval y_title=y_title
+                        <Chart series=display_series interval=interval y_title=y_title
                                thresholds=iqa_thresholds caption=chart_caption
-                               coverage=chart_coverage.into()
+                               coverage=chart_coverage.into() unit_warn=unit_warn
                                profile=profile.into() x_range=x_range />
                     }.into_any(),
                     View::Ufp => view! { <UfpView surface=ufp_surface /> }.into_any(),
