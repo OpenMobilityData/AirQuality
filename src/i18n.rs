@@ -176,6 +176,8 @@ pub struct T {
     pub comparison: &'static str,
     pub pin_trace: &'static str,
     pub unpin_trace: &'static str,
+    /// Plural form, when more than one trace is pinned.
+    pub unpin_traces: &'static str,
     /// Hint under the pin button while nothing is pinned.
     pub pin_hint: &'static str,
     /// Caution shown when the pinned and live traces have different units.
@@ -283,6 +285,7 @@ pub const EN: T = T {
     comparison: "Comparison",
     pin_trace: "Pin current trace",
     unpin_trace: "Unpin trace",
+    unpin_traces: "Unpin traces",
     pin_hint: "Pin the trace, then change the controls to overlay a second one",
     pin_units_warn: "pinned trace uses different units (shared axis)",
 
@@ -384,6 +387,7 @@ pub const FR: T = T {
     comparison: "Comparaison",
     pin_trace: "Épingler la courbe actuelle",
     unpin_trace: "Désépingler la courbe",
+    unpin_traces: "Désépingler les courbes",
     pin_hint: "Épinglez la courbe, puis modifiez les réglages pour en superposer une seconde",
     pin_units_warn: "la courbe épinglée utilise d'autres unités (axe partagé)",
 

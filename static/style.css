@@ -216,8 +216,7 @@ button:disabled:hover { background: var(--accent); border-color: var(--border); 
     flex-shrink: 0;
     width: 10px;
     height: 10px;
-    border-radius: 2px;
-    background: #ff9f43; /* keep in sync with PIN_COLOR in lib.rs */
+    border-radius: 2px; /* colour set inline, from the pin palette in lib.rs */
 }
 .pinned-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .pinned-clear {

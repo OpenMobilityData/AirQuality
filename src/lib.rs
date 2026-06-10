@@ -29,7 +29,7 @@ fn profile_anchor() -> chrono::DateTime<Utc> {
 }
 
 /// A frozen copy of the live trace, kept on the chart while the controls are
-/// reconfigured to overlay a second, live trace (A/B comparison).
+/// reconfigured into further traces (e.g. the same diurnal profile across eras).
 #[derive(Clone, PartialEq)]
 struct PinnedTrace {
     series: Series,
@@ -39,6 +39,10 @@ struct PinnedTrace {
     /// X-axis basis the trace was built on (see [`axis_kind`]).
     axis: u8,
 }
+
+/// Most pinned traces held at once (so with the live one the chart never draws
+/// more than five — beyond that the legend and palette stop being readable).
+const MAX_PINS: usize = 4;
 
 /// X-axis basis of the chart for a given profile selection: ordinary time (0),
 /// the 24-hour diurnal base (1), or the 7-day weekly base (2). Traces on
@@ -51,8 +55,19 @@ fn axis_kind(p: Option<Profile>) -> u8 {
     }
 }
 
-/// Colour of the pinned trace (the live trace keeps the usual blue).
-const PIN_COLOR: &str = "#ff9f43";
+/// Pinned-trace palette, assigned in pin order and recycled on removal (the
+/// live trace keeps the usual blue): orange, green, magenta, gold.
+const PIN_COLORS: [&str; MAX_PINS] = ["#ff9f43", "#2ecc71", "#e06cf0", "#f5d442"];
+
+/// First palette colour not used by an existing pin (pins can be removed in
+/// any order, so recycle gaps rather than cycling an index).
+fn next_pin_color(pins: &[PinnedTrace]) -> &'static str {
+    PIN_COLORS
+        .iter()
+        .find(|c| !pins.iter().any(|p| p.series.color == **c))
+        .copied()
+        .unwrap_or(PIN_COLORS[0])
+}
 
 #[wasm_bindgen(start)]
 pub fn main() {
@@ -726,47 +741,81 @@ fn App() -> impl IntoView {
         set_chart_coverage.set(coverage);
     });
 
-    // ── Trace comparison: one pinned snapshot + the live trace ──
-    // "Pin" freezes the current trace (relabelled with its data span, recoloured)
-    // so the controls can be reconfigured into a second, live trace on the same
-    // axes. Switching the x-axis basis (ordinary time ↔ diurnal ↔ weekly) clears
-    // the pin, since traces on different bases can't overlay meaningfully.
-    let (pinned, set_pinned) = signal::<Option<PinnedTrace>>(None);
+    // ── Trace comparison: pinned snapshots + the live trace ──
+    // "Pin" freezes the current trace (relabelled with its data span, recoloured
+    // from the pin palette) so the controls can be reconfigured into further
+    // traces on the same axes — e.g. the same weekday profile across several
+    // eras. Switching the x-axis basis (ordinary time ↔ diurnal ↔ weekly)
+    // clears the pins, since traces on different bases can't overlay.
+    let (pinned, set_pinned) = signal::<Vec<PinnedTrace>>(vec![]);
     Effect::new(move |_| {
         let kind = axis_kind(profile.get());
-        if pinned.with_untracked(|p| p.as_ref().is_some_and(|p| p.axis != kind)) {
-            set_pinned.set(None);
+        if pinned.with_untracked(|ps| ps.iter().any(|p| p.axis != kind)) {
+            set_pinned.set(vec![]);
         }
     });
     let on_pin = Callback::new(move |_: ()| {
         let Some(mut s) = chart_series.get_untracked().first().cloned() else { return };
+        if pinned.with_untracked(|ps| ps.len() >= MAX_PINS) {
+            return;
+        }
         // Stamp the label with the span of data behind the snapshot, so the
         // legend identifies which era the pinned curve describes.
         if let Some((f, t)) = chart_extent.get_untracked() {
             s.label = format!("{} · {} → {}", s.label, f.format("%Y-%m-%d"), t.format("%Y-%m-%d"));
         }
-        s.color = PIN_COLOR.to_string();
-        set_pinned.set(Some(PinnedTrace {
-            series: s,
-            unit: pollutants::unit_of(&selected_substance.get_untracked()),
-            axis: axis_kind(profile.get_untracked()),
-        }));
+        s.color = pinned.with_untracked(|ps| next_pin_color(ps)).to_string();
+        set_pinned.update(|ps| {
+            ps.push(PinnedTrace {
+                series: s,
+                unit: pollutants::unit_of(&selected_substance.get_untracked()),
+                axis: axis_kind(profile.get_untracked()),
+            })
+        });
     });
-    let on_unpin = Callback::new(move |_: ()| set_pinned.set(None));
+    // Remove one pin by its position in the pinned list (the sidebar chips).
+    let on_unpin = Callback::new(move |idx: usize| {
+        set_pinned.update(|ps| {
+            if idx < ps.len() {
+                ps.remove(idx);
+            }
+        });
+    });
+    let on_unpin_all = Callback::new(move |_: ()| set_pinned.set(vec![]));
 
-    // What the chart draws: the pinned snapshot (if any) under the live trace.
+    // What the chart draws: pinned snapshots (oldest first) under the live trace.
+    // While a comparison is active, the live trace's legend label is stamped
+    // with its data span just like the pinned ones (and the caption drops its
+    // date range), so every legend row identifies its own era.
     let display_series = Signal::derive(move || {
-        let mut out: Vec<Series> = pinned.get().map(|p| p.series).into_iter().collect();
-        out.extend(chart_series.get());
+        let mut out: Vec<Series> = pinned.get().into_iter().map(|p| p.series).collect();
+        let mut live = chart_series.get();
+        if !out.is_empty() {
+            if let Some((f, t)) = chart_extent.get() {
+                for s in &mut live {
+                    s.label =
+                        format!("{} · {} → {}", s.label, f.format("%Y-%m-%d"), t.format("%Y-%m-%d"));
+                }
+            }
+        }
+        out.extend(live);
         out
     });
-    let can_pin = Signal::derive(move || !chart_series.get().is_empty());
-    let pinned_label = Signal::derive(move || pinned.get().map(|p| p.series.label));
-    // Both traces share one y-axis; flag the combination when units differ.
-    let unit_warn = Signal::derive(move || {
+    let can_pin = Signal::derive(move || {
+        !chart_series.get().is_empty() && pinned.with(|ps| ps.len() < MAX_PINS)
+    });
+    // Sidebar chips: (label, colour) per pin, in pin order.
+    let pinned_chips = Signal::derive(move || {
         pinned
             .get()
-            .is_some_and(|p| p.unit != pollutants::unit_of(&selected_substance.get()))
+            .into_iter()
+            .map(|p| (p.series.label, p.series.color))
+            .collect::<Vec<_>>()
+    });
+    // All traces share one y-axis; flag the mix when any pinned unit differs.
+    let unit_warn = Signal::derive(move || {
+        let live = pollutants::unit_of(&selected_substance.get());
+        pinned.with(|ps| ps.iter().any(|p| p.unit != live))
     });
 
     let y_title = Signal::derive(move || {
@@ -788,6 +837,12 @@ fn App() -> impl IntoView {
             Some(p) => format!("{} {}", p.label(l), l.t().profile.to_lowercase()),
             None => interval.get().label(l).to_string(),
         };
+        // While a comparison is active the traces span different ranges, so a
+        // single date range in the title would misdescribe the chart — omit it
+        // (each legend row carries its own span instead).
+        if pinned.with(|ps| !ps.is_empty()) {
+            return format!("{name} · {sub} · {mode}");
+        }
         // Date slot: the span of the data actually plotted — the station's
         // record is often much shorter than the query range, and a caption
         // showing the query would contradict the axis. Falls back to the
@@ -1001,10 +1056,11 @@ fn App() -> impl IntoView {
                 on_date_to=on_date_to
                 date_presets=date_presets
                 on_date_preset=on_date_preset
-                pinned_label=pinned_label
+                pinned_chips=pinned_chips
                 can_pin=can_pin
                 on_pin=on_pin
                 on_unpin=on_unpin
+                on_unpin_all=on_unpin_all
             />
 
             <main>

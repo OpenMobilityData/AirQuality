@@ -59,12 +59,14 @@ pub fn Sidebar(
     date_presets: ReadSignal<Vec<(String, NaiveDate, NaiveDate)>>,
     on_date_preset: Callback<(NaiveDate, NaiveDate)>,
 
-    /// Trace comparison (Series view): label of the pinned snapshot (None =
-    /// nothing pinned), whether the live trace is pinnable, and the actions.
-    pinned_label: Signal<Option<String>>,
+    /// Trace comparison (Series view): one `(label, colour)` per pinned
+    /// snapshot, whether the live trace is pinnable (non-empty and below the
+    /// pin cap), and the pin / per-index unpin actions.
+    pinned_chips: Signal<Vec<(String, String)>>,
     can_pin: Signal<bool>,
     on_pin: Callback<()>,
-    on_unpin: Callback<()>,
+    on_unpin: Callback<usize>,
+    on_unpin_all: Callback<()>,
 ) -> impl IntoView {
     let lang = use_context::<ReadSignal<Lang>>().expect("Lang context not provided");
 
@@ -347,41 +349,49 @@ pub fn Sidebar(
                     </div>
                 </div>
 
-                // ── Trace comparison: pin the current trace, overlay a new one ──
+                // ── Trace comparison: pin the current trace, overlay new ones ──
                 <div class="control-group">
                     <label class="section-label">{move || lang.get().t().comparison}</label>
-                    {move || match pinned_label.get() {
-                        Some(lbl) => view! {
-                            <div class="pinned-chip">
-                                <span class="pinned-swatch"></span>
-                                <span class="pinned-text">{lbl}</span>
-                                <button class="pinned-clear"
-                                        title=move || lang.get().t().unpin_trace
-                                        on:click=move |_| on_unpin.run(())>
-                                    "×"
-                                </button>
-                            </div>
-                        }.into_any(),
-                        None => view! {
-                            <p class="pin-hint">{move || lang.get().t().pin_hint}</p>
-                        }.into_any(),
-                    }}
-                    // The action button toggles: it pins while nothing is held,
-                    // and unpins once something is (replacing = unpin, then pin).
-                    <div class="btn-group">
-                        {move || if pinned_label.get().is_some() {
+                    {move || {
+                        let chips = pinned_chips.get();
+                        if chips.is_empty() {
                             view! {
-                                <button on:click=move |_| on_unpin.run(())>
-                                    {move || lang.get().t().unpin_trace}
-                                </button>
+                                <p class="pin-hint">{move || lang.get().t().pin_hint}</p>
                             }.into_any()
                         } else {
-                            view! {
-                                <button disabled=move || !can_pin.get()
-                                        on:click=move |_| on_pin.run(())>
-                                    {move || lang.get().t().pin_trace}
+                            chips.into_iter().enumerate().map(|(i, (lbl, color))| {
+                                view! {
+                                    <div class="pinned-chip">
+                                        <span class="pinned-swatch"
+                                              style=format!("background:{color};")></span>
+                                        <span class="pinned-text">{lbl}</span>
+                                        <button class="pinned-clear"
+                                                title=move || lang.get().t().unpin_trace
+                                                on:click=move |_| on_unpin.run(i)>
+                                            "×"
+                                        </button>
+                                    </div>
+                                }
+                            }).collect_view().into_any()
+                        }
+                    }}
+                    <div class="btn-group">
+                        <button disabled=move || !can_pin.get()
+                                on:click=move |_| on_pin.run(())>
+                            {move || lang.get().t().pin_trace}
+                        </button>
+                        // Clear-all, labelled by count; individual ×s on the
+                        // chips remove single pins.
+                        {move || {
+                            let n = pinned_chips.get().len();
+                            (n > 0).then(|| view! {
+                                <button on:click=move |_| on_unpin_all.run(())>
+                                    {move || {
+                                        let t = lang.get().t();
+                                        if n > 1 { t.unpin_traces } else { t.unpin_trace }
+                                    }}
                                 </button>
-                            }.into_any()
+                            })
                         }}
                     </div>
                 </div>
