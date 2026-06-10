@@ -13,14 +13,15 @@ only static files.
 ## Views
 
 1. **Map** — a colour-coded regional overlay of the **mean / median / maximum /
-   minimum** for a selected **substance** over a chosen **year range** (From–To,
-   defaulting to the whole record). Because the stations are sparse and don't cover
+   minimum / mean-daily-max** for a selected **substance** over a chosen **date
+   range** (defaulting to the latest year), with optional **time-of-day** and
+   **weekday/weekend** filters. Because the stations are sparse and don't cover
    the whole island, an inverse-distance-weighted (IDW) interpolated heatmap is
    painted between them, with the per-pixel opacity fading out away from the nearest
    station so the map never claims certainty where there are no sensors. Station
-   markers (coloured by value) and a colour-bar legend sit on top; the range reflects
-   the stations and substances active in those years. A **PNG copy/download** widget
-   exports the composited map (basemap + heatmap + markers + legend).
+   markers (coloured by value, optionally named) and a colour-bar legend sit on top.
+   A **PNG copy/download** widget exports the composited map (basemap + heatmap +
+   markers + legend).
 2. **Time series** — concentration vs. time for a selected **station**,
    **substance**, and **aggregation interval** (Hour / Day / Week / Month / Year),
    over ranges up to the full 1986–2024 record, with a hover crosshair tooltip and
@@ -30,15 +31,29 @@ only static files.
    **Weekend** show the mean 24-hour diurnal cycle (exact hourly data for ranges up
    to 3 calendar years; a precomputed per-year profile tier beyond that, so the
    profile always spans the selected range), and **Weekly** shows the mean for each
-   day of the week (Mon–Sun, from the daily tier, spanning the whole range).
-3. **Network** — a bilingual long-form explainer on the RSQA monitoring network
+   day of the week (Mon–Sun, from the daily tier, spanning the whole range). The
+   caption shows the span of data actually plotted; when that falls short of the
+   query (late start, early end, long gaps) an **info chip** explains the shortfall.
+3. **Stations** — a bilingual long-form explainer on the RSQA monitoring network
    (coverage, pollutants, history, data caveats) with cited sources.
 4. **Methodology** — this site's data sources (with attribution) and the exact
    processing steps behind the maps and charts.
+5. **Limits** — a reference page on regulatory air-quality standards vs. health
+   guidelines for the measured pollutants.
+6. **UFP Model** — an interactive 3D surface of modelled annual median outdoor
+   **ultrafine-particle** concentrations (Montréal 2020–2021), from the combined
+   land-use-regression + deep-learning model of Lloyd et al. 2023 (*Environment
+   International*); raw model data kindly provided by the authors. Rendered
+   natively in Rust (software-rasterized canvas, turntable camera with a
+   top-down-to-oblique fly-in) from a compact grid extracted by
+   `scripts/extract-ufp-surface.py`. UFPs are not currently regulated, so this
+   tab sits apart from the RSQA monitoring views.
+7. **Further reading** — a curated, annotated link collection (official resources,
+   health research, background).
 
-Both article pages live as unstyled semantic HTML fragments in
-`src/content/rsqa-{en,fr}.html` (Network) and `src/content/rsqa-methods-{en,fr}.html`
-(Methodology), embedded at compile time and styled by the app's `.info-page` rules.
+The article pages live as unstyled semantic HTML fragments under `src/content/`
+(`rsqa-*`, `rsqa-methods-*`, `air-quality-limits-*`, `links-*`), embedded at
+compile time and styled by the app's `.info-page` rules.
 
 For the **IQA**, higher means worse: the map colours it on an absolute
 acceptability scale (Good 0–25 / Acceptable 26–50 / Poor 50+) rather than the
@@ -91,6 +106,10 @@ coordinates to the Montréal region. It emits compact files under `static/data/`
 - `iqa-dominance.json` — per year/station, the index's driving pollutant.
 - `meta.json` — years list / latest year / generation stamp / attribution.
 
+Separately from the RSQA pipeline, `static/data/ufp-surface.json` (**committed**)
+holds the modelled UFP grid for the UFP Model view, extracted from the source
+figure by `scripts/extract-ufp-surface.py`.
+
 The **Air Quality Index (IQA)** is folded in as a synthetic substance `IQA`: the
 IQA file gives the City's pre-computed per-pollutant sub-indices, and the
 preprocessor takes the **maximum across pollutants per station-hour** (the
@@ -111,7 +130,8 @@ substance picker adapt to what each year and station actually reported.
 - Rust + Leptos 0.7 client-side rendering, compiled to WebAssembly via Trunk.
 - No JavaScript beyond the `index.html` scaffolding Trunk requires.
 - SVG time-series chart; HTML `<canvas>` IDW heatmap over Web-Mercator CARTO
-  tiles; everything else is declarative Leptos.
+  tiles; a software-rasterized `<canvas>` 3D surface for the UFP model;
+  everything else is declarative Leptos.
 
 ## Repository layout
 
@@ -126,14 +146,19 @@ src/
   components/
     chart.rs          SVG line/area chart with hover crosshair + PNG export
     map.rs            IDW heatmap (canvas) + tiles + graduated markers + colour bar
+    ufp.rs            UFP Model view — software-rasterized 3D surface, turntable camera
     controls.rs       Filter sidebar (substance / statistic / station / interval / dates)
-    info.rs           Network / Methodology views — renders the embedded fragments
+    info.rs           Article views (Stations / Methodology / Limits / Further reading)
+    export.rs         Shared PNG export plumbing (download + clipboard)
   content/
-    rsqa-en.html, rsqa-fr.html              Network page content (EN/FR)
+    rsqa-en.html, rsqa-fr.html              Stations page content (EN/FR)
     rsqa-methods-en.html, rsqa-methods-fr.html  Methodology page content (EN/FR)
+    air-quality-limits-en.html              Limits reference (EN, served to both)
+    links-en.html, links-fr.html            Further-reading links (EN/FR)
 scripts/
   fetch-archive.sh    Download the 1986–2024 archive + IQA bundles into data-src/
   preprocess.py       Raw CSVs → compact JSON (schema-tolerant, all years)
+  extract-ufp-surface.py  Plotly export → static/data/ufp-surface.json (UFP Model grid)
   animate.py          Local: render map-overlay animation frames + MP4 per time bucket
   deploy.sh           [--download] + preprocess + trunk build --release + rsync
 data-src/             Raw input CSVs (git-ignored; re-downloadable)
@@ -209,3 +234,10 @@ so narrow the range or use a bigger bucket). Other flags: `--fps`,
 Data © Ville de Montréal (RSQA), distributed under the
 [Creative Commons CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 licence. Base map © OpenStreetMap contributors © CARTO.
+
+The UFP Model surface derives from
+[Lloyd et al. 2023, *Environment International*](https://www.sciencedirect.com/science/article/pii/S0160412023003793)
+(combined land-use-regression + deep-learning model, Montréal 2020–2021); raw
+model data kindly provided by Marshall Lloyd and Scott Weichenthal of McGill
+University. The values shown are modelled estimates derived from an experimental
+measurement technique, not direct measurements.
