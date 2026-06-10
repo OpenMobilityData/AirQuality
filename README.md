@@ -34,6 +34,9 @@ only static files.
    day of the week (Mon–Sun, from the daily tier, spanning the whole range). The
    caption shows the span of data actually plotted; when that falls short of the
    query (late start, early end, long gaps) an **info chip** explains the shortfall.
+   A **Comparison** control pins the current trace as a frozen snapshot so the
+   controls can be reconfigured into a second, live trace overlaid on the same
+   axes — e.g. the 1990 vs. 2024 weekday NO diurnal cycle at a traffic site.
 3. **Stations** — a bilingual long-form explainer on the RSQA monitoring network
    (coverage, pollutants, history, data caveats) with cited sources.
 4. **Methodology** — this site's data sources (with attribution) and the exact
