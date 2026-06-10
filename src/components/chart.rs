@@ -171,7 +171,9 @@ fn format_hover_date(
     match profile {
         Some(Profile::Weekday) | Some(Profile::Weekend) => ts.format("%H:%M").to_string(),
         Some(Profile::Weekly) => {
-            let d = (((ts.timestamp() as f64 - x_min) / 86_400.0).round() as i64).rem_euclid(7) as usize;
+            // Points sit mid-cell (day + 12 h), so floor — not round — maps
+            // them back to their weekday.
+            let d = (((ts.timestamp() as f64 - x_min) / 86_400.0).floor() as i64).rem_euclid(7) as usize;
             lang.t().dow[d].to_string()
         }
         None => match interval {

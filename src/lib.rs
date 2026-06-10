@@ -462,9 +462,18 @@ fn App() -> impl IntoView {
                     sum[d] += r.value;
                     cnt[d] += 1;
                 }
+                // Centre each point in its day cell (+12 h): the axis labels
+                // each weekday at the middle of its cell, so a point at the
+                // cell start would sit half a day left of its label and leave
+                // the last (Sunday) seventh of the chart empty.
                 (0..7)
                     .filter(|&d| cnt[d] > 0)
-                    .map(|d| (anchor + Duration::days(d as i64), sum[d] / cnt[d] as f64))
+                    .map(|d| {
+                        (
+                            anchor + Duration::days(d as i64) + Duration::hours(12),
+                            sum[d] / cnt[d] as f64,
+                        )
+                    })
                     .collect()
             }
         };
