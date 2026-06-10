@@ -676,7 +676,7 @@ pub fn UfpView(surface: ReadSignal<Option<UfpSurface>>) -> impl IntoView {
                 </a>
                 " "
                 {move || lang.get().t().ufp_data_credit}
-                <br/>
+                " "
                 {move || lang.get().t().ufp_modelled_note}
             </p>
         </div>
