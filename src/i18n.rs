@@ -254,7 +254,7 @@ pub const EN: T = T {
     ufp_legend_title: "UFP (particles/cm³)",
     ufp_grid_note: "Ground grid: 5 km",
     ufp_source_label: "Source:",
-    ufp_data_credit: "(Environment International, 2023). Raw model data kindly provided by Marshall Lloyd and Scott Weichenthal, the study's first and senior authors respectively.",
+    ufp_data_credit: "(Environment International, 2023). Raw model data kindly provided by Marshall Lloyd and Scott Weichenthal of McGill University.",
     ufp_modelled_note: "The values shown are modelled estimates derived from an experimental measurement technique — not direct measurements at this resolution.",
 
     select_station_desktop: "Select a station and substance from the sidebar to view its time series",
@@ -342,7 +342,7 @@ pub const FR: T = T {
     ufp_legend_title: "PUF (particules/cm³)",
     ufp_grid_note: "Grille au sol : 5 km",
     ufp_source_label: "Source :",
-    ufp_data_credit: "(Environment International, 2023). Données brutes du modèle aimablement fournies par Marshall Lloyd et Scott Weichenthal, respectivement premier auteur et auteur senior de l'étude.",
+    ufp_data_credit: "(Environment International, 2023). Données brutes du modèle aimablement fournies par Marshall Lloyd et Scott Weichenthal de l'Université McGill.",
     ufp_modelled_note: "Les valeurs affichées sont des estimations modélisées, dérivées d'une technique de mesure expérimentale — et non des mesures directes à cette résolution.",
 
     select_station_desktop: "Sélectionnez une station et une substance dans la barre latérale pour afficher la série temporelle",
