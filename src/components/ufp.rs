@@ -1,5 +1,5 @@
 //! Interactive 3D surface of modelled ultrafine-particle (UFP) concentrations
-//! (Lloyd et al. 2023 combined model, Montréal 2020).
+//! (Lloyd et al. 2023 combined model, Montréal 2020–2022).
 //!
 //! Rendered natively: the grid is software-rasterized in Rust into an RGBA
 //! pixel buffer (flat-shaded quads, painter's order) and blitted with a single
@@ -21,18 +21,19 @@ use crate::i18n::Lang;
 /// exaggeration, chosen so peaks read clearly without towering.
 const AX: f32 = 1.6;
 const AZ: f32 = 0.55;
-/// Default turntable camera: a high, north-to-the-left oblique — elevated
-/// enough that the tall downtown/highway ridges don't occlude the corridors
-/// behind them, while still reading clearly as a relief surface.
-const AZIM0: f64 = 0.20;
-const ELEV0: f64 = 1.00;
-/// Intro fly-in: the first frame is straight-down and north-up — it reads as
-/// an ordinary 2D map, anchoring the geography — and holds there for a beat,
-/// then the camera eases to the default oblique view. At this azimuth the
-/// top-down `up` vector is world +y (north up, east right); the elevation is
-/// the interaction clamp's maximum.
-const AZIM_TOP: f64 = -std::f64::consts::FRAC_PI_2;
-const ELEV_TOP: f64 = 1.55;
+/// Intro fly-in: the first frame is straight down with the grid box's
+/// northwest corner at the top of the screen (NW–SE diagonal vertical) — it
+/// reads as an ordinary 2D map, anchoring the geography — and holds there for
+/// a beat before easing to the default camera.
+const AZIM_TOP: f64 = -std::f64::consts::FRAC_PI_4;
+const ELEV_TOP: f64 = std::f64::consts::FRAC_PI_2;
+/// Default turntable camera, where the fly-in lands: tipped in from the
+/// southeast down to ~60° — high enough that the tall downtown/highway ridges
+/// don't occlude the corridors behind them, low enough to read as relief —
+/// with a slight azimuth swing (decreasing azimuth spins the map
+/// counterclockwise on screen) to break the symmetry of the straight tilt.
+const AZIM0: f64 = AZIM_TOP - 15.0 * std::f64::consts::PI / 180.0;
+const ELEV0: f64 = 1.05;
 const INTRO_HOLD_MS: f64 = 1000.0;
 const INTRO_MOVE_MS: f64 = 2400.0;
 /// Orthographic fill: world radius ~1.1 maps to this fraction of the viewport.
