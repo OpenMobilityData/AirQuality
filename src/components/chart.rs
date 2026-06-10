@@ -312,6 +312,10 @@ pub fn Chart(
     /// Human-readable selection summary (station · substance · interval · dates),
     /// shown above the plot and embedded in the PNG export.
     caption: Signal<String>,
+    /// Multi-line note on how the plotted data falls short of the query range
+    /// (late start / early end / long gaps); shown as a hoverable info chip
+    /// beside the caption. `None` hides the chip.
+    coverage: Signal<Option<String>>,
     /// Active averaging profile (None = ordinary time series) — switches the
     /// x-axis to a 24-hour (diurnal) or 7-day (weekly) synthetic base.
     profile: Signal<Option<Profile>>,
@@ -614,6 +618,9 @@ pub fn Chart(
             <div class="chart-caption"
                  style:display=move || if series.get().is_empty() { "none" } else { "" }>
                 {move || caption.get()}
+                {move || coverage.get().map(|tip| view! {
+                    <span class="info-chip" title=tip>"i"</span>
+                })}
             </div>
 
             {move || match derived() {

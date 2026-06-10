@@ -163,6 +163,27 @@ button:disabled:hover { background: var(--accent); border-color: var(--border); 
     text-overflow: ellipsis;
 }
 
+/* Coverage info chip beside the caption: hover (native title tooltip) for a
+   note on how the plotted data falls short of the requested range. */
+.info-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    margin-left: 0.45rem;
+    border: 1px solid var(--text-muted);
+    border-radius: 50%;
+    color: var(--text-muted);
+    font-size: 0.6rem;
+    font-weight: 700;
+    font-style: italic;
+    font-family: Georgia, "Times New Roman", serif;
+    vertical-align: text-bottom;
+    cursor: help;
+}
+.info-chip:hover { color: var(--text); border-color: var(--text); }
+
 /* Substance selector as a scrollable single-select list. */
 .substance-select {
     background: var(--chart-bg);

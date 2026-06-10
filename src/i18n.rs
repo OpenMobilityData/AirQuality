@@ -171,6 +171,16 @@ pub struct T {
     pub select_station_desktop: &'static str,
     pub select_station_mobile: &'static str,
 
+    // Chart coverage chip (shown when the plotted data doesn't fully cover
+    // the query range, or has long internal gaps).
+    pub cov_query: &'static str,
+    pub cov_begins: &'static str,
+    pub cov_ends: &'static str,
+    /// Singular / plural noun phrase for ">30 day" gaps; prefixed by a count.
+    pub cov_gap_singular: &'static str,
+    pub cov_gaps_plural: &'static str,
+    pub cov_longest: &'static str,
+
     // Chart legend / export
     pub leg_mean: &'static str,
     pub leg_min: &'static str,
@@ -260,6 +270,13 @@ pub const EN: T = T {
     select_station_desktop: "Select a station and substance from the sidebar to view its time series",
     select_station_mobile: "Select a station and substance from the Filters menu to view its time series",
 
+    cov_query: "Requested range",
+    cov_begins: "Data begins",
+    cov_ends: "Data ends",
+    cov_gap_singular: "gap longer than 30 days",
+    cov_gaps_plural: "gaps longer than 30 days",
+    cov_longest: "longest",
+
     leg_mean: "mean",
     leg_min: "min",
     leg_max: "max",
@@ -347,6 +364,13 @@ pub const FR: T = T {
 
     select_station_desktop: "Sélectionnez une station et une substance dans la barre latérale pour afficher la série temporelle",
     select_station_mobile: "Sélectionnez une station et une substance dans le menu Filtres pour afficher la série temporelle",
+
+    cov_query: "Plage demandée",
+    cov_begins: "Données à partir du",
+    cov_ends: "Données jusqu'au",
+    cov_gap_singular: "interruption de plus de 30 jours",
+    cov_gaps_plural: "interruptions de plus de 30 jours",
+    cov_longest: "la plus longue",
 
     leg_mean: "moy",
     leg_min: "min",

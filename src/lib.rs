@@ -381,11 +381,13 @@ fn App() -> impl IntoView {
     // the range onto a short repeating base — Weekday/Weekend → a 24-hour diurnal
     // mean from the hourly tier; Weekly → a 7-point day-of-week mean from the daily
     // tier (Montreal-local; UTC-midnight daily stamps use their calendar weekday).
-    // Also returns the date extent of the readings that actually feed the chart:
-    // the station's record is often much shorter than the query range, and the
-    // caption should describe the data shown, not the query.
-    let build_series = move || -> (Vec<Series>, Option<(NaiveDate, NaiveDate)>) {
-        let Some(sid) = selected_station.get() else { return (vec![], None) };
+    // Also returns the date extent of the readings that actually feed the chart
+    // (the station's record is often much shorter than the query range, and the
+    // caption should describe the data shown, not the query), plus a coverage
+    // note describing what's missing relative to the query — shown as an info
+    // chip beside the caption when the two disagree.
+    let build_series = move || -> (Vec<Series>, Option<(NaiveDate, NaiveDate)>, Option<String>) {
+        let Some(sid) = selected_station.get() else { return (vec![], None, None) };
         let sub = selected_substance.get();
         let prof = profile.get();
         let iv = interval.get();
@@ -404,11 +406,11 @@ fn App() -> impl IntoView {
         } else {
             match daily_cache.get().get(&sid) {
                 Some(d) => d.readings(&sub),
-                None => return (vec![], None),
+                None => return (vec![], None, None),
             }
         };
         if readings.is_empty() {
-            return (vec![], None);
+            return (vec![], None, None);
         }
 
         // Date-range filter on the raw readings.
@@ -418,19 +420,71 @@ fn App() -> impl IntoView {
             from_dt.map_or(true, |f| r.timestamp >= f) && to_dt.map_or(true, |t| r.timestamp <= t)
         });
         if readings.is_empty() {
-            return (vec![], None);
+            return (vec![], None, None);
         }
 
         // Actual span of the in-range data (the readings are not sorted across
         // tier files, so scan rather than take first/last).
-        let extent = {
+        let (data_from, data_to) = {
             let mut lo = readings[0].timestamp;
             let mut hi = readings[0].timestamp;
             for r in &readings {
                 lo = lo.min(r.timestamp);
                 hi = hi.max(r.timestamp);
             }
-            Some((lo.date_naive(), hi.date_naive()))
+            (lo.date_naive(), hi.date_naive())
+        };
+        let extent = Some((data_from, data_to));
+
+        // Coverage note: how the plotted data falls short of the query — a
+        // late start, an early end, and/or long internal gaps. `None` when the
+        // data covers the query (within a week) with no gap over 30 days.
+        let coverage = {
+            let t = lang.get().t();
+            let mut parts: Vec<String> = Vec::new();
+            if (data_from - date_from.get()).num_days() > 7 {
+                parts.push(format!("{} {}", t.cov_begins, data_from.format("%Y-%m-%d")));
+            }
+            if (date_to.get() - data_to).num_days() > 7 {
+                parts.push(format!("{} {}", t.cov_ends, data_to.format("%Y-%m-%d")));
+            }
+            let mut tss: Vec<i64> = readings.iter().map(|r| r.timestamp.timestamp()).collect();
+            tss.sort_unstable();
+            let mut n_gaps = 0u32;
+            let mut longest: Option<(i64, i64)> = None;
+            for w in tss.windows(2) {
+                if w[1] - w[0] > 30 * 86_400 {
+                    n_gaps += 1;
+                    if longest.is_none_or(|(a, b)| w[1] - w[0] > b - a) {
+                        longest = Some((w[0], w[1]));
+                    }
+                }
+            }
+            if let Some((a, b)) = longest {
+                let day = |s: i64| {
+                    chrono::DateTime::from_timestamp(s, 0)
+                        .map(|d| d.date_naive().format("%Y-%m-%d").to_string())
+                        .unwrap_or_default()
+                };
+                parts.push(if n_gaps == 1 {
+                    format!("1 {}: {} → {}", t.cov_gap_singular, day(a), day(b))
+                } else {
+                    format!("{n_gaps} {} ({} {} → {})", t.cov_gaps_plural, t.cov_longest, day(a), day(b))
+                });
+            }
+            if parts.is_empty() {
+                None
+            } else {
+                // Lead with the query range the notes are relative to; the
+                // chip's `title` tooltip renders each part on its own line.
+                let query = format!(
+                    "{}: {} → {}",
+                    t.cov_query,
+                    date_from.get().format("%Y-%m-%d"),
+                    date_to.get().format("%Y-%m-%d"),
+                );
+                Some(std::iter::once(query).chain(parts).collect::<Vec<_>>().join("\n"))
+            }
         };
 
         let anchor = profile_anchor();
@@ -478,7 +532,7 @@ fn App() -> impl IntoView {
             }
         };
         if pts.is_empty() {
-            return (vec![], None);
+            return (vec![], None, None);
         }
 
         let l = lang.get();
@@ -495,14 +549,17 @@ fn App() -> impl IntoView {
         (
             vec![Series { label, color: "#4a9eff".to_string(), dash: String::new(), points: pts }],
             extent,
+            coverage,
         )
     };
     let (chart_series, set_chart_series) = signal::<Vec<Series>>(vec![]);
     let (chart_extent, set_chart_extent) = signal::<Option<(NaiveDate, NaiveDate)>>(None);
+    let (chart_coverage, set_chart_coverage) = signal::<Option<String>>(None);
     Effect::new(move |_| {
-        let (series, extent) = build_series();
+        let (series, extent, coverage) = build_series();
         set_chart_series.set(series);
         set_chart_extent.set(extent);
+        set_chart_coverage.set(coverage);
     });
 
     let y_title = Signal::derive(move || {
@@ -760,6 +817,7 @@ fn App() -> impl IntoView {
                     View::Series => view! {
                         <Chart series=chart_series interval=interval y_title=y_title
                                thresholds=iqa_thresholds caption=chart_caption
+                               coverage=chart_coverage.into()
                                profile=profile.into() x_range=x_range />
                     }.into_any(),
                     View::Ufp => view! { <UfpView surface=ufp_surface /> }.into_any(),
