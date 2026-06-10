@@ -17,7 +17,9 @@ use components::map::RegionMap;
 use components::ufp::UfpView;
 use data::loader::{self, DailySeries, IqaDominanceMap, Meta, ProfileSeries, SeriesFile, UfpSurface};
 use data::pollutants;
-use data::types::{DayType, Interval, Profile, Stat, Station, View};
+use data::types::{
+    DayType, Interval, Profile, Reading, Stat, Station, View, MONTH_LEN_DAYS, MONTH_START_DAYS,
+};
 use i18n::Lang;
 
 /// Fixed anchor for synthetic profile axes — a Monday at UTC midnight. Diurnal
@@ -30,7 +32,7 @@ fn profile_anchor() -> chrono::DateTime<Utc> {
 
 /// A frozen copy of the live trace, kept on the chart while the controls are
 /// reconfigured into further traces (e.g. the same diurnal profile across eras).
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 struct PinnedTrace {
     series: Series,
     /// Substance key and unit of the pinned trace. When the displayed traces
@@ -41,6 +43,14 @@ struct PinnedTrace {
     unit: &'static str,
     /// X-axis basis the trace was built on (see [`axis_kind`]).
     axis: u8,
+    /// For ordinary (non-profile) pins, the in-range readings behind the
+    /// trace, so it can be re-bucketed to follow the live interval. Profile
+    /// pins fold to a fixed base, so they keep their points as pinned.
+    readings: Option<Vec<Reading>>,
+    /// Whether those readings are hourly (pinned under the Hour interval).
+    /// Daily readings can't honestly produce hourly buckets, so such pins
+    /// degrade to daily resolution when the live interval is Hour.
+    hourly: bool,
 }
 
 /// Most pinned traces held at once (so with the live one the chart never draws
@@ -48,13 +58,15 @@ struct PinnedTrace {
 const MAX_PINS: usize = 4;
 
 /// X-axis basis of the chart for a given profile selection: ordinary time (0),
-/// the 24-hour diurnal base (1), or the 7-day weekly base (2). Traces on
-/// different bases can't share an axis, so changing basis clears the pin.
+/// the 24-hour diurnal base (1), the 7-day weekly base (2), or the 12-month
+/// annual base (3). Traces on different bases can't share an axis, so changing
+/// basis clears the pins.
 fn axis_kind(p: Option<Profile>) -> u8 {
     match p {
         None => 0,
         Some(Profile::Weekday | Profile::Weekend) => 1,
         Some(Profile::Weekly) => 2,
+        Some(Profile::Annual) => 3,
     }
 }
 
@@ -461,11 +473,15 @@ fn App() -> impl IntoView {
     // tier (Montreal-local; UTC-midnight daily stamps use their calendar weekday).
     // Also returns the date extent of the readings that actually feed the chart
     // (the station's record is often much shorter than the query range, and the
-    // caption should describe the data shown, not the query), plus a coverage
-    // note describing what's missing relative to the query — shown as an info
-    // chip beside the caption when the two disagree.
-    let build_series = move || -> (Vec<Series>, Option<(NaiveDate, NaiveDate)>, Option<String>) {
-        let Some(sid) = selected_station.get() else { return (vec![], None, None) };
+    // caption should describe the data shown, not the query), a coverage note
+    // describing what's missing relative to the query — shown as an info chip
+    // beside the caption when the two disagree — and, in ordinary (non-profile)
+    // mode, the in-range readings themselves so a pinned copy of this trace can
+    // be re-bucketed when the live interval changes.
+    type BuiltSeries =
+        (Vec<Series>, Option<(NaiveDate, NaiveDate)>, Option<String>, Option<Vec<Reading>>);
+    let build_series = move || -> BuiltSeries {
+        let Some(sid) = selected_station.get() else { return (vec![], None, None, None) };
         let sub = selected_substance.get();
         let prof = profile.get();
         let iv = interval.get();
@@ -488,7 +504,7 @@ fn App() -> impl IntoView {
                 let t = l.t();
                 let cache = profile_cache.get();
                 let Some(bins) = cache.get(&sid).and_then(|ps| ps.substances.get(&sub)) else {
-                    return (vec![], None, None);
+                    return (vec![], None, None, None);
                 };
                 let (ylo, yhi) = (date_from.get().year(), date_to.get().year());
                 let weekend = p == Profile::Weekend;
@@ -519,10 +535,10 @@ fn App() -> impl IntoView {
                     .collect();
                 let (Some(&first), Some(&last)) = (years_present.first(), years_present.last())
                 else {
-                    return (vec![], None, None);
+                    return (vec![], None, None, None);
                 };
                 if pts.is_empty() {
-                    return (vec![], None, None);
+                    return (vec![], None, None, None);
                 }
                 // Extent at year resolution, clamped to the query range.
                 let data_from = NaiveDate::from_ymd_opt(first, 1, 1).unwrap().max(date_from.get());
@@ -574,9 +590,11 @@ fn App() -> impl IntoView {
                         color: "#4a9eff".to_string(),
                         dash: String::new(),
                         points: pts,
+                        max_gap_secs: None,
                     }],
                     Some((data_from, data_to)),
                     coverage,
+                    None,
                 );
             }
         }
@@ -595,11 +613,11 @@ fn App() -> impl IntoView {
         } else {
             match daily_cache.get().get(&sid) {
                 Some(d) => d.readings(&sub),
-                None => return (vec![], None, None),
+                None => return (vec![], None, None, None),
             }
         };
         if readings.is_empty() {
-            return (vec![], None, None);
+            return (vec![], None, None, None);
         }
 
         // Date-range filter on the raw readings.
@@ -609,7 +627,7 @@ fn App() -> impl IntoView {
             from_dt.map_or(true, |f| r.timestamp >= f) && to_dt.map_or(true, |t| r.timestamp <= t)
         });
         if readings.is_empty() {
-            return (vec![], None, None);
+            return (vec![], None, None, None);
         }
 
         // Actual span of the in-range data (the readings are not sorted across
@@ -718,9 +736,28 @@ fn App() -> impl IntoView {
                     })
                     .collect()
             }
+            Some(Profile::Annual) => {
+                // Seasonal (month-of-year) mean over a synthetic 365-day base,
+                // each point centred in its month cell like the weekly profile.
+                let mut sum = [0.0_f64; 12];
+                let mut cnt = [0u32; 12];
+                for r in &readings {
+                    let m = r.timestamp.date_naive().month0() as usize;
+                    sum[m] += r.value;
+                    cnt[m] += 1;
+                }
+                (0..12)
+                    .filter(|&m| cnt[m] > 0)
+                    .map(|m| {
+                        let mid = Duration::days(MONTH_START_DAYS[m])
+                            + Duration::hours(MONTH_LEN_DAYS[m] * 12);
+                        (anchor + mid, sum[m] / cnt[m] as f64)
+                    })
+                    .collect()
+            }
         };
         if pts.is_empty() {
-            return (vec![], None, None);
+            return (vec![], None, None, None);
         }
 
         let name = station_name(sid);
@@ -728,20 +765,32 @@ fn App() -> impl IntoView {
             None => format!("{} — {}", name, pollutants::name_of(&sub, l)),
             Some(p) => format!("{} — {} ({})", name, pollutants::name_of(&sub, l), p.label(l)),
         };
+        // Ordinary-mode traces hand back their readings so a pinned copy can
+        // re-bucket when the live interval changes (profiles never re-bucket).
+        let live_readings = prof.is_none().then_some(readings);
         (
-            vec![Series { label, color: "#4a9eff".to_string(), dash: String::new(), points: pts }],
+            vec![Series {
+                label,
+                color: "#4a9eff".to_string(),
+                dash: String::new(),
+                points: pts,
+                max_gap_secs: None,
+            }],
             extent,
             coverage,
+            live_readings,
         )
     };
     let (chart_series, set_chart_series) = signal::<Vec<Series>>(vec![]);
     let (chart_extent, set_chart_extent) = signal::<Option<(NaiveDate, NaiveDate)>>(None);
     let (chart_coverage, set_chart_coverage) = signal::<Option<String>>(None);
+    let (chart_readings, set_chart_readings) = signal::<Option<Vec<Reading>>>(None);
     Effect::new(move |_| {
-        let (series, extent, coverage) = build_series();
+        let (series, extent, coverage, readings) = build_series();
         set_chart_series.set(series);
         set_chart_extent.set(extent);
         set_chart_coverage.set(coverage);
+        set_chart_readings.set(readings);
     });
 
     // ── Trace comparison: pinned snapshots + the live trace ──
@@ -769,12 +818,16 @@ fn App() -> impl IntoView {
         }
         s.color = pinned.with_untracked(|ps| next_pin_color(ps)).to_string();
         let substance = selected_substance.get_untracked();
+        let axis = axis_kind(profile.get_untracked());
         set_pinned.update(|ps| {
             ps.push(PinnedTrace {
                 series: s,
                 unit: pollutants::unit_of(&substance),
                 substance,
-                axis: axis_kind(profile.get_untracked()),
+                axis,
+                // Ordinary pins keep their readings to follow interval changes.
+                readings: (axis == 0).then(|| chart_readings.get_untracked()).flatten(),
+                hourly: axis == 0 && interval.get_untracked() == Interval::Hour,
             })
         });
     });
@@ -803,8 +856,28 @@ fn App() -> impl IntoView {
     // axis each label also records what 100 % means for that trace.
     let display_series = Signal::derive(move || {
         let live_unit = pollutants::unit_of(&selected_substance.get());
-        let mut traces: Vec<(Series, &'static str)> =
-            pinned.get().into_iter().map(|p| (p.series, p.unit)).collect();
+        let iv = interval.get();
+        let mut traces: Vec<(Series, &'static str)> = pinned
+            .get()
+            .into_iter()
+            .map(|p| {
+                let mut s = p.series;
+                // Ordinary pins follow the live interval by re-bucketing their
+                // stored readings. A daily-resolution pin can't honestly make
+                // hourly buckets, so it degrades to Day under the Hour interval
+                // (carrying its own line-break threshold so it stays a line).
+                if p.axis == 0 {
+                    if let Some(rs) = &p.readings {
+                        let eff =
+                            if iv == Interval::Hour && !p.hourly { Interval::Day } else { iv };
+                        s.points = loader::aggregate(rs, eff);
+                        s.max_gap_secs =
+                            Some(crate::components::chart::gap_threshold_secs(eff));
+                    }
+                }
+                (s, p.unit)
+            })
+            .collect();
         let comparing = !traces.is_empty();
         for mut s in chart_series.get() {
             if comparing {
@@ -888,16 +961,14 @@ fn App() -> impl IntoView {
         )
     });
 
-    // Fixed x-axis range for profile modes (synthetic 24-hour or 7-day base).
-    let x_range = Signal::derive(move || match profile.get() {
-        None => None,
-        Some(p) if p.needs_hourly() => {
-            let a = profile_anchor();
-            Some((a, a + Duration::hours(24)))
-        }
-        Some(_) => {
-            let a = profile_anchor();
-            Some((a, a + Duration::days(7)))
+    // Fixed x-axis range for profile modes (synthetic 24-hour / 7-day / 365-day base).
+    let x_range = Signal::derive(move || {
+        let a = profile_anchor();
+        match profile.get() {
+            None => None,
+            Some(Profile::Weekday | Profile::Weekend) => Some((a, a + Duration::hours(24))),
+            Some(Profile::Weekly) => Some((a, a + Duration::days(7))),
+            Some(Profile::Annual) => Some((a, a + Duration::days(365))),
         }
     });
 

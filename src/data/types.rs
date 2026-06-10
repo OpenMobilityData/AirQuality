@@ -144,18 +144,20 @@ impl Interval {
 
 /// Averaging profile for the time-series view: fold the selected date range onto
 /// a short repeating time base. Weekday/Weekend produce a 24-hour diurnal mean
-/// (from hourly data); Weekly produces a 7-point day-of-week mean (from the daily
-/// tier, so it spans the whole record).
+/// (from hourly data); Weekly produces a 7-point day-of-week mean and Annual a
+/// 12-point month-of-year (seasonal) mean (both from the daily tier, so they
+/// span the whole record).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Profile {
     Weekday,
     Weekend,
     Weekly,
+    Annual,
 }
 
 impl Profile {
     pub fn all() -> &'static [Profile] {
-        &[Profile::Weekday, Profile::Weekend, Profile::Weekly]
+        &[Profile::Weekday, Profile::Weekend, Profile::Weekly, Profile::Annual]
     }
     pub fn label(self, lang: Lang) -> &'static str {
         let t = lang.t();
@@ -163,6 +165,7 @@ impl Profile {
             Profile::Weekday => t.prof_weekday,
             Profile::Weekend => t.prof_weekend,
             Profile::Weekly => t.prof_weekly,
+            Profile::Annual => t.prof_annual,
         }
     }
     /// True for the diurnal profiles, which need the hourly tier.
@@ -170,6 +173,12 @@ impl Profile {
         matches!(self, Profile::Weekday | Profile::Weekend)
     }
 }
+
+/// Day-of-year offset (non-leap) of each month's start, and month lengths —
+/// the Annual profile's synthetic 365-day axis places each month's point (and
+/// tick label) at the middle of its month cell.
+pub const MONTH_START_DAYS: [i64; 12] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+pub const MONTH_LEN_DAYS: [i64; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 /// Which top-level view is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

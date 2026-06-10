@@ -30,8 +30,10 @@ only static files.
    profile** folds the selected range onto a short repeating base: **Weekday** and
    **Weekend** show the mean 24-hour diurnal cycle (exact hourly data for ranges up
    to 3 calendar years; a precomputed per-year profile tier beyond that, so the
-   profile always spans the selected range), and **Weekly** shows the mean for each
-   day of the week (Mon–Sun, from the daily tier, spanning the whole range). The
+   profile always spans the selected range), **Weekly** shows the mean for each
+   day of the week (Mon–Sun), and **Annual** the mean for each calendar month
+   (Jan–Dec, the seasonal cycle) — the latter two from the daily tier, spanning
+   the whole range. The
    caption shows the span of data actually plotted; when that falls short of the
    query (late start, early end, long gaps) an **info chip** explains the shortfall.
    A **Comparison** control pins the current trace as a frozen snapshot (up to

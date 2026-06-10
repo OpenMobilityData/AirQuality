@@ -4,7 +4,7 @@ use leptos::prelude::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
-use crate::data::types::{Interval, Profile};
+use crate::data::types::{Interval, Profile, MONTH_LEN_DAYS, MONTH_START_DAYS};
 use crate::i18n::Lang;
 
 #[derive(Clone, PartialEq)]
@@ -14,6 +14,11 @@ pub struct Series {
     /// SVG `stroke-dasharray` value; empty string means solid.
     pub dash: String,
     pub points: Vec<(DateTime<Utc>, f64)>,
+    /// Per-series line-break threshold override (seconds between consecutive
+    /// points before the line breaks); `None` uses the chart's interval-based
+    /// default. Set on pinned traces whose bucketing differs from the live
+    /// interval (e.g. a daily-resolution pin shown beside an hourly trace).
+    pub max_gap_secs: Option<i64>,
 }
 
 /// Format a concentration value with a sensible number of significant digits.
@@ -176,6 +181,12 @@ fn format_hover_date(
             let d = (((ts.timestamp() as f64 - x_min) / 86_400.0).floor() as i64).rem_euclid(7) as usize;
             lang.t().dow[d].to_string()
         }
+        Some(Profile::Annual) => {
+            // Mid-month points on the synthetic 365-day base → month name.
+            let day = (((ts.timestamp() as f64 - x_min) / 86_400.0).floor() as i64).clamp(0, 364);
+            let m = MONTH_START_DAYS.iter().rposition(|&s| s <= day).unwrap_or(0);
+            lang.t().months[m].to_string()
+        }
         None => match interval {
             Interval::Hour => ts.with_timezone(&MontrealTz).format("%Y-%m-%d %H:%M %Z").to_string(),
             _ => ts.format("%Y-%m-%d").to_string(),
@@ -290,7 +301,7 @@ async fn build_chart_png_blob(
 }
 
 /// Max gap (seconds) between consecutive buckets before the line breaks.
-fn gap_threshold_secs(interval: Interval) -> i64 {
+pub fn gap_threshold_secs(interval: Interval) -> i64 {
     match interval {
         Interval::Hour => 2 * 3600,
         Interval::Day => 2 * 86_400,
@@ -363,13 +374,16 @@ pub fn Chart(
                 let mut prev_ts: Option<i64> = None;
                 let mut seg_first_x: Option<f64> = None;
                 let mut seg_last_x: f64 = 0.0;
+                // A pinned trace bucketed coarser than the live interval keeps
+                // its own break threshold, so it doesn't shred into dots.
+                let threshold = ser.max_gap_secs.unwrap_or(gap_threshold);
                 for (dt, v) in &ser.points {
                     let ts = dt.timestamp();
                     let x = g.to_x(ts);
                     let y = g.to_y(*v);
                     let new_segment = match prev_ts {
                         None => true,
-                        Some(p) => ts - p > gap_threshold,
+                        Some(p) => ts - p > threshold,
                     };
                     if new_segment {
                         if let Some(fx) = seg_first_x {
@@ -420,6 +434,14 @@ pub fn Chart(
                 .map(|d| {
                     let ts = (g.x_min + (d as f64 + 0.5) * 86_400.0) as i64;
                     (g.to_x(ts), l.t().dow[d].to_string())
+                })
+                .collect(),
+            // Annual: one label per month, centred in its month cell.
+            Some(Profile::Annual) => (0..12)
+                .map(|m| {
+                    let mid = MONTH_START_DAYS[m] as f64 + MONTH_LEN_DAYS[m] as f64 / 2.0;
+                    let ts = (g.x_min + mid * 86_400.0) as i64;
+                    (g.to_x(ts), l.t().months[m].to_string())
                 })
                 .collect(),
             None => {
