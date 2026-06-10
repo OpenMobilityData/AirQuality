@@ -48,9 +48,10 @@
   <p>
     The build covers the <strong>full published archive, 1986–2024</strong> — every annual file
     the City has released. A preprocessing step ingests all 39 years and turns them into compact
-    files so the browser downloads only what a given view needs: a small per-year summary for the
-    map, a daily-resolution series per station for long-range charts, and hourly detail per
-    station-year fetched on demand.
+    files so the browser downloads only what a given view needs: a daily-resolution series per
+    station that powers the map and long-range charts, hourly detail per station-year fetched on
+    demand, and a compact per-year summary of each station's daily cycle that powers hour-of-day
+    profiles over long ranges.
   </p>
   <ul>
     <li>
@@ -111,8 +112,9 @@
     <li>
       <strong>Averaging profiles</strong> — the time series can fold the selected range onto a
       short repeating base. <em>Weekday</em> and <em>Weekend</em> give the mean 24-hour diurnal
-      cycle (built from hourly data, so they reflect the in-range years for which hourly detail is
-      loaded); <em>Weekly</em> gives the mean for each day of the week (Mon–Sun, from the daily
+      cycle — computed from exact hourly data for ranges up to three calendar years, and from a
+      precomputed per-year summary beyond that, so the profile always reflects the whole selected
+      range; <em>Weekly</em> gives the mean for each day of the week (Mon–Sun, from the daily
       tier, over the whole range). These reveal commute-hour and weekday/weekend patterns at
       traffic-influenced sites.
     </li>

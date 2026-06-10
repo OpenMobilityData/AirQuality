@@ -50,8 +50,9 @@
     La version couvre l'<strong>ensemble de l'archive publiée, 1986–2024</strong> — chaque fichier
     annuel diffusé par la Ville. Une étape de prétraitement ingère les 39 années et les convertit en
     fichiers compacts, de sorte que le navigateur ne télécharge que ce dont chaque vue a besoin&nbsp;:
-    un petit résumé par année pour la carte, une série quotidienne par station pour les graphiques de
-    longue durée, et le détail horaire par station-année chargé à la demande.
+    une série quotidienne par station qui alimente la carte et les graphiques de longue durée, le
+    détail horaire par station-année chargé à la demande, et un résumé annuel compact du cycle
+    quotidien de chaque station qui alimente les profils horaires sur les longues plages.
   </p>
   <ul>
     <li>
@@ -116,8 +117,9 @@
     <li>
       <strong>Profils moyens</strong> — la série temporelle peut replier la plage choisie sur une
       base répétée courte. <em>Semaine</em> et <em>Fin de semaine</em> donnent le cycle diurne moyen
-      sur 24 heures (à partir des données horaires&nbsp;; ils reflètent donc les années de la plage
-      pour lesquelles le détail horaire est chargé)&nbsp;; <em>Hebdomadaire</em> donne la moyenne par
+      sur 24 heures — calculé à partir des données horaires exactes pour les plages d'au plus trois
+      années civiles, et d'un résumé annuel précalculé au-delà, de sorte que le profil reflète
+      toujours l'ensemble de la plage choisie&nbsp;; <em>Hebdomadaire</em> donne la moyenne par
       jour de la semaine (lun–dim, à partir de la série quotidienne, sur toute la plage). Ces profils
       révèlent les pointes aux heures de pointe et les écarts semaine/fin de semaine aux sites
       influencés par la circulation.
