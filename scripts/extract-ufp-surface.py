@@ -79,7 +79,7 @@ def main():
     valid = [v for v in flat if v is not None]
     doc = {
         "source": "Lloyd et al. 2023, Environment International — "
-        "combined LUR + deep-learning model, Montréal 2020–2022",
+        "combined LUR + deep-learning model, Montréal 2020–2021",
         "unit": "pt/cm³",
         "nx": i1 - i0,
         "ny": j1 - j0,

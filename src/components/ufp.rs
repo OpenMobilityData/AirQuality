@@ -1,5 +1,5 @@
 //! Interactive 3D surface of modelled ultrafine-particle (UFP) concentrations
-//! (Lloyd et al. 2023 combined model, Montréal 2020–2022).
+//! (Lloyd et al. 2023 combined model, Montréal 2020–2021).
 //!
 //! Rendered natively: the grid is software-rasterized in Rust into an RGBA
 //! pixel buffer (flat-shaded quads, painter's order) and blitted with a single
