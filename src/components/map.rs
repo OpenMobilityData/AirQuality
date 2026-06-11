@@ -25,10 +25,13 @@ const FILL_FRACTION: f64 = 0.82;
 const MAX_FILL_SCALE: f64 = 2.6;
 /// Padding (fraction of span) added around the station bounding box.
 const BBOX_PAD: f64 = 0.14;
-/// IDW influence radius — alpha fades to 0 this far from the nearest station.
-/// Sized so adjacent central-island stations (~3–5 km apart) blend into a
-/// continuous field while isolated outliers still fade out honestly.
-const COVERAGE_KM: f64 = 6.0;
+/// Multiplier on each pollutant's spatial-representativeness scale
+/// (`pollutants::dispersal_km`) when shading the overlay. The opacity follows
+/// a Gaussian of that scaled radius around the nearest station, so the shaded
+/// extent honestly reflects how far a reading plausibly generalizes —
+/// traffic-local species show tight halos, regional ones broad fields. Keep
+/// the Methodology page (EN/FR) in step if this changes.
+const DISPERSAL_FACTOR: f64 = 1.0;
 /// Peak overlay opacity directly over a station (0–255).
 const BASE_ALPHA: f64 = 150.0;
 /// Downscale factor for the heatmap render (computed coarse, drawn smooth).
@@ -375,6 +378,8 @@ fn aggregate_dominance(dom: &IqaDominanceMap, from: i32, to: i32) -> BTreeMap<St
 }
 
 /// Paint the IDW heatmap onto `canvas` for the current (substance, stat).
+/// `fade_km` is the substance's dispersal scale (already factor-multiplied):
+/// the Gaussian sigma of the opacity falloff around the nearest station.
 fn draw_heatmap(
     canvas: &web_sys::HtmlCanvasElement,
     geom: &Geom,
@@ -382,6 +387,7 @@ fn draw_heatmap(
     vmin: f64,
     vmax: f64,
     is_iqa: bool,
+    fade_km: f64,
 ) {
     let (w, h) = (geom.w, geom.h);
     canvas.set_width(w as u32);
@@ -404,7 +410,7 @@ fn draw_heatmap(
 
     let gw = (w / HEATMAP_STEP).ceil().max(1.0) as u32;
     let gh = (h / HEATMAP_STEP).ceil().max(1.0) as u32;
-    let coverage_px = COVERAGE_KM * 1000.0 / geom.m_per_px;
+    let fade_px = (fade_km * 1000.0 / geom.m_per_px).max(1.0);
     let span = (vmax - vmin).max(1e-9);
 
     let mut data = vec![0u8; (gw * gh * 4) as usize];
@@ -430,10 +436,11 @@ fn draw_heatmap(
             } else {
                 ramp_rgb(((v - vmin) / span).clamp(0.0, 1.0))
             };
-            // Smoothstep fade with distance from the nearest station.
-            let nd = nearest.sqrt() / coverage_px;
-            let f = (1.0 - nd).clamp(0.0, 1.0);
-            let f = f * f * (3.0 - 2.0 * f);
+            // Gaussian fade with distance from the nearest station, at the
+            // substance's dispersal scale — the theoretical falloff of a
+            // point source's influence, so opacity reads as confidence.
+            let nd = nearest.sqrt() / fade_px;
+            let f = (-nd * nd).exp();
             let a = (BASE_ALPHA * f).round() as u8;
             let idx = ((j * gw + i) * 4) as usize;
             data[idx] = r;
@@ -854,7 +861,8 @@ pub fn RegionMap(
             .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), (_, _, v)| {
                 (lo.min(*v), hi.max(*v))
             });
-        draw_heatmap(&canvas, &geom, &points, vmin, vmax, sub == IQA_KEY);
+        let fade_km = pollutants::dispersal_km(&sub) * DISPERSAL_FACTOR;
+        draw_heatmap(&canvas, &geom, &points, vmin, vmax, sub == IQA_KEY, fade_km);
     });
 
     // ── PNG export (copy / download), mirroring the chart's widgets ──

@@ -17,8 +17,10 @@ only static files.
    range** (defaulting to the latest year), with optional **time-of-day** and
    **weekday/weekend** filters. Because the stations are sparse and don't cover
    the whole island, an inverse-distance-weighted (IDW) interpolated heatmap is
-   painted between them, with the per-pixel opacity fading out away from the nearest
-   station so the map never claims certainty where there are no sensors. Station
+   painted between them, with the per-pixel opacity following a Gaussian falloff
+   from the nearest station at each pollutant's spatial-representativeness scale
+   (0.5 km for hyper-local ultrafine particles up to 15 km for regional ozone) so
+   the map never claims certainty where there are no sensors. Station
    markers (coloured by value, optionally named) and a colour-bar legend sit on top.
    A **PNG copy/download** widget exports the composited map (basemap + heatmap +
    markers + legend).

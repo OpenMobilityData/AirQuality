@@ -181,9 +181,20 @@
     <strong>interpolation par pondération inverse à la distance (IDW)</strong>&nbsp;: chaque pixel
     mélange les valeurs des stations en accordant plus de poids aux stations proches. Pour éviter
     de laisser croire à une certitude là où il n'y a pas de capteurs, l'<strong>opacité de la
-    surface diminue avec la distance</strong> à la station la plus proche et disparaît au bout de
-    quelques kilomètres. Une substance mesurée à une seule station (par exemple le benzène) montre
-    ce seul marqueur sans surface, puisqu'il n'y a rien à interpoler.
+    surface suit une décroissance gaussienne</strong> avec la distance à la station la plus
+    proche, selon une <strong>échelle de dispersion propre à chaque polluant</strong> — en gros,
+    la distance sur laquelle la lecture d'un moniteur reste représentative, d'après les échelles
+    spatiales utilisées pour l'implantation des stations et les études de décroissance près des
+    sources. Les espèces primaires liées à la circulation s'estompent en un ou deux kilomètres
+    (particules ultrafines 0,5&nbsp;km&nbsp;; monoxyde d'azote et carbone suie 1&nbsp;km&nbsp;;
+    monoxyde de carbone et sulfure d'hydrogène 1,5&nbsp;km&nbsp;; composés organiques volatils
+    2&nbsp;km)&nbsp;; les espèces d'échelle de quartier portent à quelques kilomètres (NO₂, SO₂
+    et particules en suspension 3&nbsp;km&nbsp;; IQA 4&nbsp;km&nbsp;; PM10 5&nbsp;km)&nbsp;; et
+    les polluants secondaires, mélangés à l'échelle régionale, restent visibles beaucoup plus
+    loin (PM2,5 10&nbsp;km&nbsp;; ozone 15&nbsp;km). Ces échelles sont multipliées par un facteur
+    ajustable unique, actuellement <strong>1,0</strong>. Une substance mesurée à une seule
+    station (par exemple le benzène) montre ce seul marqueur sans surface, puisqu'il n'y a rien
+    à interpoler.
   </p>
 </section>
 

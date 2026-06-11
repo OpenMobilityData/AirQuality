@@ -170,10 +170,18 @@
     The stations are sparse points, so the coloured overlay is an
     <strong>inverse-distance-weighted (IDW) interpolation</strong>: each pixel blends the
     station values, weighting nearer stations more heavily. To avoid implying certainty where
-    there are no sensors, the overlay's <strong>opacity fades with distance</strong> from the
-    nearest station and disappears a few kilometres out. A substance measured at only one
-    station (for example benzene) shows that single marker with no surface, since there is
-    nothing to interpolate between.
+    there are no sensors, the overlay's <strong>opacity follows a Gaussian falloff</strong>
+    with distance from the nearest station, at a <strong>pollutant-specific dispersal
+    scale</strong> — roughly how far a monitor's reading remains representative, following the
+    spatial scales used in monitor siting and near-source decay studies. Traffic-local primary
+    species fade within a kilometre or two (ultrafine particles 0.5&nbsp;km; nitric oxide and
+    black carbon 1&nbsp;km; carbon monoxide and hydrogen sulfide 1.5&nbsp;km; volatile organics
+    2&nbsp;km); neighbourhood-scale species reach a few kilometres (NO₂, SO₂ and total
+    suspended particles 3&nbsp;km; the IQA 4&nbsp;km; PM10 5&nbsp;km); and secondary, regionally
+    mixed pollutants stay visible much farther out (PM2.5 10&nbsp;km; ozone 15&nbsp;km). These
+    scales are multiplied by a single adjustable factor, currently <strong>1.0</strong>. A
+    substance measured at only one station (for example benzene) shows that single marker with
+    no surface, since there is nothing to interpolate between.
   </p>
 </section>
 
